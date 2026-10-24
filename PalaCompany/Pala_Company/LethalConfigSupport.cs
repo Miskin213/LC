@@ -2,6 +2,8 @@ using System;
 using System.Runtime.CompilerServices;
 using BepInEx.Configuration;
 using LethalConfig;
+using LethalConfig.ConfigItems;
+using LethalConfig.ConfigItems.Options;
 
 namespace PalaCompany
 {
@@ -67,7 +69,7 @@ namespace PalaCompany
                 "Reconnect Kick",
                 "Stop and restart the Kick chat connection using the current settings.",
                 "Reconnect Kick",
-                restartKick));
+                () => restartKick()));
         }
     }
 }
