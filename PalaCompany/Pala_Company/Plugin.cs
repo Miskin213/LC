@@ -189,7 +189,10 @@ namespace PalaCompany
             rm.SpawnEnemyGameObject(hit.position, 0f, -1, type);
             lastGlobal = now;
             lastByUser[msg.User] = now;
-            Logger.LogInfo("[spawned] " + type.enemyName + " for " + msg.User);
+            Logger.LogInfo("[spawned] " + type.enemyName + " for " + msg.User
+                + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
+                + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")
+                + " playerInside=" + player.isInsideFactory);
         }
     }
 }
