@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
+using KickChat;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
@@ -50,6 +51,8 @@ namespace PalaCompany
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
         private ConfigEntry<int> maxLive;
         private ConfigEntry<bool> enableDebugKeys;
+        private KickChatClient kickChatClient;
+        private bool kickChatStopped;
 
         private readonly Dictionary<string, float> lastByUser = new Dictionary<string, float>();
         private readonly List<EnemyAI> modSpawnedEnemies = new List<EnemyAI>();
@@ -67,7 +70,44 @@ namespace PalaCompany
             spawnRadius = Config.Bind("Limits", "SpawnDistance", 9f, "How far from the target player enemies appear.");
             blocklist = Config.Bind("Limits", "Blocklist", "", "Comma-separated enemy names chat may NOT spawn.");
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
+            var kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
+            var kickChatroomId = Config.Bind("Kick", "ChatroomId", 0L, "Kick chatroom ID.");
+            var kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
+            var kickCluster = Config.Bind("Kick", "Cluster", "us2", "Kick Pusher cluster.");
+            if (kickEnabled.Value && kickChatroomId.Value != 0)
+            {
+                kickChatClient = new KickChatClient(
+                    kickChatroomId.Value,
+                    kickAppKey.Value,
+                    kickCluster.Value,
+                    Logger.LogInfo);
+                kickChatClient.OnMessage += HandleKickMessage;
+                kickChatClient.Start();
+            }
             Logger.LogInfo("Pala Company Phase2 loaded!");
+        }
+
+        private void HandleKickMessage(KickMessage msg)
+        {
+            if (msg != null && msg.MessageType == "message")
+                EnqueueChat(msg.Username, msg.Content);
+        }
+
+        private void OnDestroy()
+        {
+            StopKickChatClient();
+        }
+
+        private void OnApplicationQuit()
+        {
+            StopKickChatClient();
+        }
+
+        private void StopKickChatClient()
+        {
+            if (kickChatClient == null || kickChatStopped) return;
+            kickChatStopped = true;
+            kickChatClient.Stop();
         }
 
         private void Update()

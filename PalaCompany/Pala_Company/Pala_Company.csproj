@@ -19,5 +19,6 @@
     <Reference Include="Unity.Netcode.Runtime"><HintPath>$(GameManaged)\Unity.Netcode.Runtime.dll</HintPath></Reference>
     <Reference Include="Unity.InputSystem"><HintPath>$(GameManaged)\Unity.InputSystem.dll</HintPath></Reference>
     <Reference Include="UnityEngine.AIModule"><HintPath>$(GameManaged)\UnityEngine.AIModule.dll</HintPath></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(GameManaged)\Newtonsoft.Json.dll</HintPath></Reference>
   </ItemGroup>
 </Project>

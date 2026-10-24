@@ -13,3 +13,4 @@ Rules:
 - Beginner: explain changes in 2-3 sentences.
 - Enemies only target players in their own zone: EnemyAI.PlayerIsTargetable requires player.isInsideFactory != enemy.isOutside (isOutside = EnemyType.isOutsideEnemy). Never spawn an enemy near a player in the wrong zone.
 - Do not "fix" zone problems with SetEnemyOutside; it only changes the host's copy.
+- KickChatClient.cs must not reference UnityEngine or System.Text.Json (not available in netstandard2.1)
