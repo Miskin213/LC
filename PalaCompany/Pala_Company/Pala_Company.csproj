@@ -8,7 +8,7 @@
   <PropertyGroup>
     <GameManaged>C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Lethal Company_Data\Managed</GameManaged>
     <BepCore>C:\Users\miskin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\pala company mod\BepInEx\core</BepCore>
-    <LethalConfigDll>C:\Users\miskin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\pala company mod\BepInEx\plugins\AinaVT-LethalConfig\LethalConfig</LethalConfigDll>
+    <LethalConfigDll>C:\Users\miskin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\pala company mod\BepInEx\plugins\AinaVT-LethalConfig\LethalConfig\LethalConfig.dll</LethalConfigDll>
   </PropertyGroup>
 
   <ItemGroup>
