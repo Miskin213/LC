@@ -17,7 +17,7 @@ namespace PalaCompany
         public string Text;
     }
 
-    [BepInPlugin("yourname.pala_company", "Pala Company", "1.0.0")]
+    [BepInPlugin("miskin213.pala_company", "Pala Company", "1.0.0")]
     public class Plugin : BaseUnityPlugin
     {
         private static readonly ConcurrentQueue<ChatMessage> Inbox = new ConcurrentQueue<ChatMessage>();
@@ -50,7 +50,7 @@ namespace PalaCompany
         private ConfigEntry<string> prefix, blocklist;
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
         private ConfigEntry<int> maxLive;
-        private ConfigEntry<bool> enableDebugKeys;
+        private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips;
         private KickChatClient kickChatClient;
         private bool kickChatStopped;
 
@@ -70,6 +70,8 @@ namespace PalaCompany
             spawnRadius = Config.Bind("Limits", "SpawnDistance", 9f, "How far from the target player enemies appear.");
             blocklist = Config.Bind("Limits", "Blocklist", "", "Comma-separated enemy names chat may NOT spawn.");
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
+            countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
+            showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
             var kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
             var kickChatroomId = Config.Bind("Kick", "ChatroomId", 0L, "Kick chatroom ID.");
             var kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
@@ -218,8 +220,16 @@ namespace PalaCompany
                 return;
             }
 
-            modSpawnedEnemies.RemoveAll(e => e == null || e.isEnemyDead);
-            int live = modSpawnedEnemies.Count;
+            int live;
+            if (countOnlyModEnemies.Value)
+            {
+                modSpawnedEnemies.RemoveAll(e => e == null || e.isEnemyDead);
+                live = modSpawnedEnemies.Count;
+            }
+            else
+            {
+                live = rm.SpawnedEnemies.Count(e => e != null && !e.isEnemyDead);
+            }
             if (live >= maxLive.Value) { Reject(msg.User, "too many enemies alive (" + live + ")"); return; }
 
             bool wantInside = !type.isOutsideEnemy;
@@ -257,6 +267,8 @@ namespace PalaCompany
                 return;
             }
             modSpawnedEnemies.Add(spawnedEnemy);
+            if (showSpawnTips.Value && HUDManager.Instance != null)
+                HUDManager.Instance.DisplayTip(msg.User, type.enemyName);
             Logger.LogInfo("[spawned] " + type.enemyName + " for " + msg.User
                 + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
                 + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")
