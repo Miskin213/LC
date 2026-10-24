@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
@@ -18,6 +19,7 @@ namespace PalaCompany
     }
 
     [BepInPlugin("miskin213.pala_company", "Pala Company", "1.0.0")]
+    [BepInDependency("ainavt.lc.lethalconfig", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         private static readonly ConcurrentQueue<ChatMessage> Inbox = new ConcurrentQueue<ChatMessage>();
@@ -47,10 +49,10 @@ namespace PalaCompany
             "just chatting", "!spawn spore lizard"
         };
 
-        private ConfigEntry<string> prefix, blocklist;
+        private ConfigEntry<string> prefix, blocklist, kickChatroomId, kickAppKey, kickCluster;
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
         private ConfigEntry<int> maxLive;
-        private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips;
+        private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled;
         private KickChatClient kickChatClient;
         private bool kickChatStopped;
 
@@ -72,21 +74,54 @@ namespace PalaCompany
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
             showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
-            var kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
-            var kickChatroomId = Config.Bind("Kick", "ChatroomId", 0L, "Kick chatroom ID.");
-            var kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
-            var kickCluster = Config.Bind("Kick", "Cluster", "us2", "Kick Pusher cluster.");
-            if (kickEnabled.Value && kickChatroomId.Value != 0)
+            kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
+            kickChatroomId = Config.Bind("Kick", "ChatroomId", "0", "Kick chatroom ID.");
+            kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
+            kickCluster = Config.Bind("Kick", "Cluster", "us2", "Kick Pusher cluster.");
+            if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("ainavt.lc.lethalconfig"))
             {
-                kickChatClient = new KickChatClient(
-                    kickChatroomId.Value,
-                    kickAppKey.Value,
-                    kickCluster.Value,
-                    Logger.LogInfo);
-                kickChatClient.OnMessage += HandleKickMessage;
-                kickChatClient.Start();
+                LethalConfigSupport.Register(
+                    userCooldown, globalCooldown, maxLive, spawnRadius,
+                    enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled,
+                    prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
+                    RestartKick);
             }
+            if (kickEnabled.Value) StartKickClient();
             Logger.LogInfo("Pala Company Phase2 loaded!");
+        }
+
+        public void RestartKick()
+        {
+            try
+            {
+                StopKickChatClient();
+                kickChatClient = null;
+                kickChatStopped = false;
+                if (kickEnabled.Value) StartKickClient();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to restart Kick chat: " + e);
+            }
+        }
+
+        private void StartKickClient()
+        {
+            if (!long.TryParse(kickChatroomId.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var chatroomId)
+                || chatroomId <= 0)
+            {
+                Logger.LogInfo("Kick chat is enabled, but Kick.ChatroomId is empty or invalid; the connection remains disabled.");
+                return;
+            }
+
+            kickChatClient = new KickChatClient(
+                chatroomId,
+                kickAppKey.Value,
+                kickCluster.Value,
+                Logger.LogInfo);
+            kickChatClient.OnMessage += HandleKickMessage;
+            kickChatStopped = false;
+            kickChatClient.Start();
         }
 
         private void HandleKickMessage(KickMessage msg)
