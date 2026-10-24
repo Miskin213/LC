@@ -49,15 +49,17 @@ namespace PalaCompany
             "just chatting", "!spawn spore lizard"
         };
 
-        private ConfigEntry<string> prefix, blocklist, kickChatroomId, kickAppKey, kickCluster;
+        private ConfigEntry<string> prefix, blocklist, kickChatroomId, kickAppKey, kickCluster, perEnemyLimits;
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
-        private ConfigEntry<int> maxLive;
+        private ConfigEntry<int> maxLive, defaultPerEnemyMax;
         private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled;
         private KickChatClient kickChatClient;
         private bool kickChatStopped;
 
         private readonly Dictionary<string, float> lastByUser = new Dictionary<string, float>();
         private readonly List<EnemyAI> modSpawnedEnemies = new List<EnemyAI>();
+        private readonly HashSet<string> loggedInvalidPerEnemyLimitEntries =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private float lastGlobal = -999f;
         private Dictionary<string, EnemyType> enemyCache;
         private int testIndex, fakeViewer;
@@ -71,6 +73,8 @@ namespace PalaCompany
             maxLive = Config.Bind("Limits", "MaxLiveEnemies", 8, "No spawns while this many enemies are alive.");
             spawnRadius = Config.Bind("Limits", "SpawnDistance", 9f, "How far from the target player enemies appear.");
             blocklist = Config.Bind("Limits", "Blocklist", "", "Comma-separated enemy names chat may NOT spawn.");
+            perEnemyLimits = Config.Bind("Limits", "PerEnemyLimits", "", "Per-enemy max alive, e.g. \"Jester=1, Nutcracker=1, Bracken=2\". Names match chat commands incl. aliases. Values must be 1 or higher.");
+            defaultPerEnemyMax = Config.Bind("Limits", "DefaultPerEnemyMax", 0, "Default per-enemy max alive; 0 disables the default limit.");
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
             showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
@@ -81,7 +85,7 @@ namespace PalaCompany
             if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("ainavt.lc.lethalconfig"))
             {
                 LethalConfigSupport.Register(
-                    userCooldown, globalCooldown, maxLive, spawnRadius,
+                    userCooldown, globalCooldown, maxLive, spawnRadius, perEnemyLimits, defaultPerEnemyMax,
                     enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled,
                     prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
                     RestartKick);
@@ -184,6 +188,50 @@ namespace PalaCompany
             return new string((s ?? "").Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
 
+        private bool TryResolveEnemyType(string name, out EnemyType type)
+        {
+            string key = Norm(name);
+            if (Aliases.TryGetValue(key, out var target)) key = target;
+            return GetEnemyTypes().TryGetValue(key, out type);
+        }
+
+        private Dictionary<EnemyType, int> ParsePerEnemyLimits()
+        {
+            var limits = new Dictionary<EnemyType, int>();
+            foreach (var rawEntry in perEnemyLimits.Value.Split(','))
+            {
+                string entry = rawEntry.Trim();
+                if (entry.Length == 0) continue;
+
+                int separator = entry.IndexOf('=');
+                if (separator <= 0 || separator != entry.LastIndexOf('='))
+                {
+                    LogInvalidPerEnemyLimit(entry);
+                    continue;
+                }
+
+                string enemyName = entry.Substring(0, separator).Trim();
+                string value = entry.Substring(separator + 1).Trim();
+                if (enemyName.Length == 0
+                    || !int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int limit)
+                    || limit < 1
+                    || !TryResolveEnemyType(enemyName, out var enemyType))
+                {
+                    LogInvalidPerEnemyLimit(entry);
+                    continue;
+                }
+
+                limits[enemyType] = limit;
+            }
+            return limits;
+        }
+
+        private void LogInvalidPerEnemyLimit(string entry)
+        {
+            if (loggedInvalidPerEnemyLimitEntries.Add(entry))
+                Logger.LogWarning("Ignoring invalid Limits.PerEnemyLimits entry: '" + entry + "'.");
+        }
+
         private Dictionary<string, EnemyType> GetEnemyTypes()
         {
             if (enemyCache != null && enemyCache.Count > 0) return enemyCache;
@@ -234,9 +282,7 @@ namespace PalaCompany
             if (!rm.IsServer) { Reject(msg.User, "not the host"); return; }
             if (!sor.shipHasLanded) { Reject(msg.User, "ship hasn't landed"); return; }
 
-            string key = Norm(arg);
-            if (Aliases.TryGetValue(key, out var target)) key = target;
-            if (!GetEnemyTypes().TryGetValue(key, out var type)) { Reject(msg.User, "unknown enemy '" + arg + "'"); return; }
+            if (!TryResolveEnemyType(arg, out var type)) { Reject(msg.User, "unknown enemy '" + arg + "'"); return; }
 
             var blocked = new HashSet<string>(blocklist.Value.Split(',').Select(Norm));
             if (blocked.Contains(Norm(type.enemyName))) { Reject(msg.User, type.enemyName + " is blocked"); return; }
@@ -266,6 +312,23 @@ namespace PalaCompany
                 live = rm.SpawnedEnemies.Count(e => e != null && !e.isEnemyDead);
             }
             if (live >= maxLive.Value) { Reject(msg.User, "too many enemies alive (" + live + ")"); return; }
+
+            var enemyLimits = ParsePerEnemyLimits();
+            int enemyLimit;
+            if (!enemyLimits.TryGetValue(type, out enemyLimit))
+                enemyLimit = defaultPerEnemyMax.Value;
+            if (enemyLimit > 0)
+            {
+                if (countOnlyModEnemies.Value)
+                    modSpawnedEnemies.RemoveAll(e => e == null || e.isEnemyDead);
+                var enemiesToCount = countOnlyModEnemies.Value ? modSpawnedEnemies : rm.SpawnedEnemies;
+                int enemyCount = enemiesToCount.Count(e => e != null && !e.isEnemyDead && e.enemyType == type);
+                if (enemyCount >= enemyLimit)
+                {
+                    Reject(msg.User, type.enemyName + " limit reached (" + enemyCount + " alive)");
+                    return;
+                }
+            }
 
             bool wantInside = !type.isOutsideEnemy;
             var candidates = sor.allPlayerScripts

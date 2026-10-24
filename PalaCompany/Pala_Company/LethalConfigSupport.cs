@@ -15,6 +15,8 @@ namespace PalaCompany
             ConfigEntry<float> globalCooldown,
             ConfigEntry<int> maxLive,
             ConfigEntry<float> spawnRadius,
+            ConfigEntry<string> perEnemyLimits,
+            ConfigEntry<int> defaultPerEnemyMax,
             ConfigEntry<bool> enableDebugKeys,
             ConfigEntry<bool> countOnlyModEnemies,
             ConfigEntry<bool> showSpawnTips,
@@ -46,6 +48,12 @@ namespace PalaCompany
                 Max = 50,
                 RequiresRestart = false
             }));
+            LethalConfigManager.AddConfigItem(new IntSliderConfigItem(defaultPerEnemyMax, new IntSliderOptions
+            {
+                Min = 0,
+                Max = 10,
+                RequiresRestart = false
+            }));
             LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(spawnRadius, new FloatSliderOptions
             {
                 Min = 1f,
@@ -60,6 +68,7 @@ namespace PalaCompany
 
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(prefix, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(blocklist, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(perEnemyLimits, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickChatroomId, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickAppKey, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickCluster, requiresRestart: false));
