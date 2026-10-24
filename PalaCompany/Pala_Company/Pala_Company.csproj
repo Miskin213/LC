@@ -15,6 +15,10 @@
     <Reference Include="Assembly-CSharp"><HintPath>$(GameManaged)\Assembly-CSharp.dll</HintPath></Reference>
     <Reference Include="UnityEngine"><HintPath>$(GameManaged)\UnityEngine.dll</HintPath></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameManaged)\UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(GameManaged)\UnityEngine.UIModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(GameManaged)\UnityEngine.ImageConversionModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(GameManaged)\UnityEngine.UI.dll</HintPath></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(GameManaged)\Unity.TextMeshPro.dll</HintPath></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepCore)\BepInEx.dll</HintPath></Reference>
     <Reference Include="0Harmony"><HintPath>$(BepCore)\0Harmony.dll</HintPath></Reference>
     <Reference Include="Unity.Netcode.Runtime"><HintPath>$(GameManaged)\Unity.Netcode.Runtime.dll</HintPath></Reference>
@@ -22,5 +26,6 @@
     <Reference Include="UnityEngine.AIModule"><HintPath>$(GameManaged)\UnityEngine.AIModule.dll</HintPath></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(GameManaged)\Newtonsoft.Json.dll</HintPath></Reference>
     <Reference Include="LethalConfig"><HintPath>$(LethalConfigDll).dll</HintPath></Reference>
+    <EmbeddedResource Include="title.png" Condition="Exists('title.png')" />
   </ItemGroup>
 </Project>

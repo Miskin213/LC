@@ -1,14 +1,19 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
 using KickChat;
+using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace PalaCompany
 {
@@ -53,6 +58,7 @@ namespace PalaCompany
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
         private ConfigEntry<int> maxLive, defaultPerEnemyMax;
         private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled;
+        private ConfigEntry<bool> logMenuHierarchy, customTitle;
         private KickChatClient kickChatClient;
         private bool kickChatStopped;
 
@@ -78,6 +84,8 @@ namespace PalaCompany
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
             showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
+            logMenuHierarchy = Config.Bind("Menu", "LogHierarchy", false, "Log UI hierarchy details when the MainMenu scene loads.");
+            customTitle = Config.Bind("Menu", "CustomTitle", true, "Replace the MainMenu title image with title.png.");
             kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
             kickChatroomId = Config.Bind("Kick", "ChatroomId", "0", "Kick chatroom ID.");
             kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
@@ -90,8 +98,173 @@ namespace PalaCompany
                     prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
                     RestartKick);
             }
+            SceneManager.sceneLoaded += OnSceneLoaded;
             if (kickEnabled.Value) StartKickClient();
             Logger.LogInfo("Pala Company Phase2 loaded!");
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            Logger.LogInfo("Scene loaded: " + scene.name);
+            if (customTitle.Value && scene.name == "MainMenu")
+                StartCoroutine(ApplyCustomTitle(scene));
+            if (logMenuHierarchy.Value && scene.name == "MainMenu")
+                StartCoroutine(LogMenuHierarchyAfterDelay(scene));
+        }
+
+        private IEnumerator ApplyCustomTitle(Scene scene)
+        {
+            yield return new WaitForSecondsRealtime(1f);
+
+            Image image = null;
+            Sprite customSprite = null;
+            if (!TryApplyCustomTitle(out image, out customSprite))
+                yield break;
+
+            for (int elapsedMilliseconds = 0; elapsedMilliseconds < 10000; elapsedMilliseconds += 250)
+            {
+                yield return new WaitForSecondsRealtime(0.25f);
+                try
+                {
+                    if (image != null && image.sprite != customSprite)
+                    {
+                        string replacedName = image.sprite != null ? image.sprite.name : "<none>";
+                        image.sprite = customSprite;
+                        Logger.LogInfo("Restored custom menu title after replacing sprite: " + replacedName);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError("Failed to restore custom menu title: " + e);
+                    break;
+                }
+            }
+        }
+
+        private bool TryApplyCustomTitle(out Image image, out Sprite customSprite)
+        {
+            image = null;
+            customSprite = null;
+            try
+            {
+                var titleObject = GameObject.Find("Canvas/MenuContainer/MainButtons/HeaderImage");
+                if (titleObject == null)
+                {
+                    Logger.LogInfo("Custom menu title not applied: HeaderImage was not found.");
+                    return false;
+                }
+
+                image = titleObject.GetComponent<Image>();
+                if (image == null)
+                {
+                    Logger.LogInfo("Custom menu title not applied: HeaderImage has no Image component.");
+                    return false;
+                }
+
+                byte[] imageData = null;
+                string titlePath = Path.Combine(Path.GetDirectoryName(Info.Location), "title.png");
+                if (File.Exists(titlePath))
+                {
+                    imageData = File.ReadAllBytes(titlePath);
+                }
+                else
+                {
+                    var assembly = GetType().Assembly;
+                    string resourceName = assembly.GetManifestResourceNames()
+                        .FirstOrDefault(name => name.EndsWith("title.png", StringComparison.OrdinalIgnoreCase));
+                    if (resourceName != null)
+                    {
+                        using (var stream = assembly.GetManifestResourceStream(resourceName))
+                        using (var memory = new MemoryStream())
+                        {
+                            stream.CopyTo(memory);
+                            imageData = memory.ToArray();
+                        }
+                    }
+                }
+
+                if (imageData == null)
+                {
+                    Logger.LogInfo("Custom menu title not applied: title.png was not found beside the plugin DLL or as an embedded resource.");
+                    return false;
+                }
+
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!ImageConversion.LoadImage(texture, imageData, false))
+                {
+                    Destroy(texture);
+                    Logger.LogError("Custom menu title not applied: title.png could not be loaded.");
+                    return false;
+                }
+
+                customSprite = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, texture.width, texture.height),
+                    new Vector2(0.5f, 0.5f));
+                customSprite.name = "PalaCompanyTitle";
+
+                var previousSprite = image.sprite;
+                Logger.LogInfo(
+                    "Replacing menu title sprite: name=" + (previousSprite != null ? previousSprite.name : "<none>")
+                    + " rectSize=" + (previousSprite != null ? previousSprite.rect.size.ToString() : "<none>")
+                    + " textureSize=" + (previousSprite != null
+                        ? previousSprite.texture.width + "x" + previousSprite.texture.height
+                        : "<none>"));
+                image.sprite = customSprite;
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to apply custom menu title: " + e);
+                return false;
+            }
+        }
+
+        private IEnumerator LogMenuHierarchyAfterDelay(Scene scene)
+        {
+            yield return new WaitForSecondsRealtime(2f);
+            try
+            {
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    foreach (var image in root.GetComponentsInChildren<Image>(true))
+                    {
+                        var rectSize = image.rectTransform.rect.size;
+                        Logger.LogInfo(
+                            "[menu-ui] path=" + GetHierarchyPath(image.transform)
+                            + " activeInHierarchy=" + image.gameObject.activeInHierarchy
+                            + " component=" + image.GetType().Name
+                            + " sprite=" + (image.sprite != null ? image.sprite.name : "<none>")
+                            + " rectSize=" + rectSize);
+                    }
+
+                    foreach (var text in root.GetComponentsInChildren<TMP_Text>(true))
+                    {
+                        var rectSize = text.rectTransform.rect.size;
+                        Logger.LogInfo(
+                            "[menu-ui] path=" + GetHierarchyPath(text.transform)
+                            + " activeInHierarchy=" + text.gameObject.activeInHierarchy
+                            + " component=" + text.GetType().Name
+                            + " text=" + text.text
+                            + " rectSize=" + rectSize);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to log MainMenu UI hierarchy: " + e);
+            }
+        }
+
+        private static string GetHierarchyPath(Transform transform)
+        {
+            string path = transform.name;
+            while (transform.parent != null)
+            {
+                transform = transform.parent;
+                path = transform.name + "/" + path;
+            }
+            return path;
         }
 
         public void RestartKick()
@@ -136,6 +309,7 @@ namespace PalaCompany
 
         private void OnDestroy()
         {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             StopKickChatClient();
         }
 
