@@ -49,8 +49,10 @@ namespace PalaCompany
         private ConfigEntry<string> prefix, blocklist;
         private ConfigEntry<float> userCooldown, globalCooldown, spawnRadius;
         private ConfigEntry<int> maxLive;
+        private ConfigEntry<bool> enableDebugKeys;
 
         private readonly Dictionary<string, float> lastByUser = new Dictionary<string, float>();
+        private readonly List<EnemyAI> modSpawnedEnemies = new List<EnemyAI>();
         private float lastGlobal = -999f;
         private Dictionary<string, EnemyType> enemyCache;
         private int testIndex, fakeViewer;
@@ -64,6 +66,7 @@ namespace PalaCompany
             maxLive = Config.Bind("Limits", "MaxLiveEnemies", 8, "No spawns while this many enemies are alive.");
             spawnRadius = Config.Bind("Limits", "SpawnDistance", 9f, "How far from the target player enemies appear.");
             blocklist = Config.Bind("Limits", "Blocklist", "", "Comma-separated enemy names chat may NOT spawn.");
+            enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             Logger.LogInfo("Pala Company Phase2 loaded!");
         }
 
@@ -72,7 +75,7 @@ namespace PalaCompany
             try
             {
                 var kb = Keyboard.current;
-                if (kb != null)
+                if (enableDebugKeys.Value && kb != null)
                 {
                     if (kb.f9Key.wasPressedThisFrame) ListEnemies();
                     if (kb.f10Key.wasPressedThisFrame)
@@ -175,7 +178,8 @@ namespace PalaCompany
                 return;
             }
 
-            int live = rm.SpawnedEnemies.Count(e => e != null && !e.isEnemyDead);
+            modSpawnedEnemies.RemoveAll(e => e == null || e.isEnemyDead);
+            int live = modSpawnedEnemies.Count;
             if (live >= maxLive.Value) { Reject(msg.User, "too many enemies alive (" + live + ")"); return; }
 
             bool wantInside = !type.isOutsideEnemy;
@@ -198,9 +202,21 @@ namespace PalaCompany
                 return;
             }
 
-            rm.SpawnEnemyGameObject(hit.position, 0f, -1, type);
+            var spawnedEnemyReference = rm.SpawnEnemyGameObject(hit.position, 0f, -1, type);
             lastGlobal = now;
             lastByUser[msg.User] = now;
+            if (!spawnedEnemyReference.TryGet(out var networkObject))
+            {
+                Logger.LogError("Could not track spawned " + type.enemyName + " for the live enemy cap.");
+                return;
+            }
+            var spawnedEnemy = networkObject.GetComponent<EnemyAI>();
+            if (spawnedEnemy == null)
+            {
+                Logger.LogError("Spawned " + type.enemyName + " has no EnemyAI component; it cannot be tracked for the live enemy cap.");
+                return;
+            }
+            modSpawnedEnemies.Add(spawnedEnemy);
             Logger.LogInfo("[spawned] " + type.enemyName + " for " + msg.User
                 + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
                 + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")
