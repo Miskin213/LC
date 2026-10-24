@@ -1,0 +1,22 @@
+public enum CauseOfDeath
+{
+	Unknown,
+	Bludgeoning,
+	Gravity,
+	Blast,
+	Strangulation,
+	Suffocation,
+	Mauling,
+	Gunshots,
+	Crushing,
+	Drowning,
+	Abandoned,
+	Electrocution,
+	Kicking,
+	Burning,
+	Stabbing,
+	Fan,
+	Inertia,
+	Snipping,
+	Scratching
+}

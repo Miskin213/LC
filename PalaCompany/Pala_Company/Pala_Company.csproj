@@ -16,5 +16,8 @@
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameManaged)\UnityEngine.CoreModule.dll</HintPath></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepCore)\BepInEx.dll</HintPath></Reference>
     <Reference Include="0Harmony"><HintPath>$(BepCore)\0Harmony.dll</HintPath></Reference>
+    <Reference Include="Unity.Netcode.Runtime"><HintPath>$(GameManaged)\Unity.Netcode.Runtime.dll</HintPath></Reference>
+    <Reference Include="Unity.InputSystem"><HintPath>$(GameManaged)\Unity.InputSystem.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.AIModule"><HintPath>$(GameManaged)\UnityEngine.AIModule.dll</HintPath></Reference>
   </ItemGroup>
 </Project>
