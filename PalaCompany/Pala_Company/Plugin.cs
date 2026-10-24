@@ -42,7 +42,7 @@ namespace PalaCompany
 
         private static readonly string[] TestMessages =
         {
-            "!spawn hoarding bug", "!spawn hygrodere", "!spawn notarealenemy",
+            "!spawn hygrodere", "!spawn baboon", "!spawn notarealenemy",
             "just chatting", "!spawn spore lizard"
         };
 
@@ -160,6 +160,12 @@ namespace PalaCompany
 
             var blocked = new HashSet<string>(blocklist.Value.Split(',').Select(Norm));
             if (blocked.Contains(Norm(type.enemyName))) { Reject(msg.User, type.enemyName + " is blocked"); return; }
+            if (type.isOutsideEnemy && type.nestSpawnPrefab != null && type.requireNestObjectsToSpawn
+                && !rm.enemyNestSpawnObjects.Any(n => n != null && n.enemyType == type))
+            {
+                Reject(msg.User, type.enemyName + " needs a nest that doesn't exist on this moon");
+                return;
+            }
 
             float now = Time.time;
             if (now - lastGlobal < globalCooldown.Value) { Reject(msg.User, "global cooldown"); return; }
@@ -172,10 +178,16 @@ namespace PalaCompany
             int live = rm.SpawnedEnemies.Count(e => e != null && !e.isEnemyDead);
             if (live >= maxLive.Value) { Reject(msg.User, "too many enemies alive (" + live + ")"); return; }
 
+            bool wantInside = !type.isOutsideEnemy;
             var candidates = sor.allPlayerScripts
-                .Where(p => p != null && p.isPlayerControlled && !p.isPlayerDead && !p.isInHangarShipRoom)
+                .Where(p => p != null && p.isPlayerControlled && !p.isPlayerDead && !p.isInHangarShipRoom
+                    && p.isInsideFactory == wantInside)
                 .ToList();
-            if (candidates.Count == 0) { Reject(msg.User, "no valid player target"); return; }
+            if (candidates.Count == 0)
+            {
+                Reject(msg.User, type.enemyName + " needs a player " + (wantInside ? "inside the facility" : "outside"));
+                return;
+            }
 
             var player = candidates[UnityEngine.Random.Range(0, candidates.Count)];
             Vector2 ring = UnityEngine.Random.insideUnitCircle.normalized * spawnRadius.Value;
