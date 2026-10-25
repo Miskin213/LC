@@ -63,6 +63,7 @@ namespace PalaCompany
         private ConfigEntry<bool> pollEnabled, pollAllowVoteChange, pollWritePollFile;
         private ConfigEntry<float> pollCycleSeconds, pollVoteSeconds;
         private ConfigEntry<string> pollNoVotesBehavior, pollBlocklist;
+        private ConfigEntry<string> displayLanguage;
         private KickChatClient kickChatClient;
         private Poll poll;
         private bool kickChatStopped;
@@ -89,6 +90,9 @@ namespace PalaCompany
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
             showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
+            displayLanguage = Config.Bind("Display", "Language", "English", "Language used for player-facing text (English or Turkish).");
+            UpdateLanguage();
+            displayLanguage.SettingChanged += (_, __) => UpdateLanguage();
             logMenuHierarchy = Config.Bind("Menu", "LogHierarchy", false, "Log UI hierarchy details when the MainMenu scene loads.");
             customTitle = Config.Bind("Menu", "CustomTitle", true, "Replace the MainMenu title image with title.png.");
             kickEnabled = Config.Bind("Kick", "Enabled", false, "Connect to Kick chat.");
@@ -116,7 +120,7 @@ namespace PalaCompany
                     prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
                     RestartKick,
                     pollEnabled, pollCycleSeconds, pollVoteSeconds, pollAllowVoteChange,
-                    pollNoVotesBehavior, pollBlocklist, pollWritePollFile);
+                    pollNoVotesBehavior, pollBlocklist, pollWritePollFile, displayLanguage);
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (kickEnabled.Value) StartKickClient();
@@ -533,6 +537,13 @@ namespace PalaCompany
                 HUDManager.Instance.DisplayTip(header, body);
         }
 
+        private void UpdateLanguage()
+        {
+            Loc.Current = string.Equals(displayLanguage.Value, "Turkish", StringComparison.OrdinalIgnoreCase)
+                ? Loc.Language.Turkish
+                : Loc.Language.English;
+        }
+
         public bool IsSpawnableNow(EnemyType type)
         {
             return EvaluateSpawn(type, "poll", false, out _, out _);
@@ -657,7 +668,9 @@ namespace PalaCompany
             }
             modSpawnedEnemies.Add(spawnedEnemy);
             if (showSpawnTips.Value && requester != "poll" && HUDManager.Instance != null)
-                HUDManager.Instance.DisplayTip(requester, type.enemyName);
+                HUDManager.Instance.DisplayTip(
+                    Loc.T("tip.spawn.header", requester),
+                    Loc.T("tip.spawn.body", type.enemyName));
             Logger.LogInfo("[spawned] " + type.enemyName + " for " + requester
                 + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
                 + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")

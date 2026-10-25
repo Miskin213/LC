@@ -188,8 +188,8 @@ namespace PalaCompany
             _resultRemaining = 0f;
             _resultText = "";
             _showTip(
-                "POLL: type !1 or !2",
-                "1) " + _option1.enemyName + "\n2) " + _option2.enemyName);
+                Loc.T("poll.open.header"),
+                Loc.T("poll.open.body", _option1.enemyName, _option2.enemyName));
             return true;
         }
 
@@ -214,16 +214,20 @@ namespace PalaCompany
                 winner = votes1 > votes2 ? _option1 : _option2;
             }
 
-            string voteSummary = "1) " + _option1.enemyName + " - " + votes1 + " votes; "
-                + "2) " + _option2.enemyName + " - " + votes2 + " votes";
+            string voteSummary = Loc.T(
+                "poll.vote.summary",
+                _option1.enemyName,
+                votes1,
+                _option2.enemyName,
+                votes2);
             if (winner == null)
             {
-                _resultText = "POLL RESULT - skipped (no votes)";
+                _resultText = Loc.T("poll.result.file.skipped");
                 _log("Poll closed with no votes; skipped.");
             }
             else
             {
-                _resultText = "POLL RESULT - " + winner.enemyName + " won; " + voteSummary;
+                _resultText = Loc.T("poll.result.file.winner", winner.enemyName, voteSummary);
             }
 
             ClearOpenPoll();
@@ -234,7 +238,9 @@ namespace PalaCompany
 
             if (winner == null)
             {
-                _showTip("POLL: skipped", "No votes; poll skipped. " + voteSummary);
+                _showTip(
+                    Loc.T("poll.result.tip.skipped.header"),
+                    Loc.T("poll.result.tip.skipped.body", voteSummary));
                 return;
             }
 
@@ -246,8 +252,8 @@ namespace PalaCompany
 
             string resultBody = voteSummary;
             if (!string.IsNullOrEmpty(failureReason))
-                resultBody += "\nCouldn't spawn " + winner.enemyName + ": " + failureReason;
-            _showTip("POLL: " + winner.enemyName + " won", resultBody);
+                resultBody += Loc.T("poll.spawn.failed", winner.enemyName, failureReason);
+            _showTip(Loc.T("poll.result.tip.winner.header", winner.enemyName), resultBody);
         }
 
         private void ClearOpenPoll()
@@ -267,9 +273,13 @@ namespace PalaCompany
             string content = "";
             if (IsOpen)
             {
-                content = "POLL - " + Math.Max(0, (int)Math.Ceiling(_voteRemaining)) + "s left\n"
-                    + "1) " + _option1.enemyName + " - " + _votes.Count(vote => vote.Value == 1) + " votes\n"
-                    + "2) " + _option2.enemyName + " - " + _votes.Count(vote => vote.Value == 2) + " votes";
+                content = Loc.T(
+                    "poll.file.open",
+                    Math.Max(0, (int)Math.Ceiling(_voteRemaining)),
+                    _option1.enemyName,
+                    _votes.Count(vote => vote.Value == 1),
+                    _option2.enemyName,
+                    _votes.Count(vote => vote.Value == 2));
             }
             else if (_resultRemaining > 0f)
             {

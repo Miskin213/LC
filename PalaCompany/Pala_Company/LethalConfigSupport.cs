@@ -33,7 +33,8 @@ namespace PalaCompany
             ConfigEntry<bool> pollAllowVoteChange,
             ConfigEntry<string> pollNoVotesBehavior,
             ConfigEntry<string> pollBlocklist,
-            ConfigEntry<bool> pollWritePollFile)
+            ConfigEntry<bool> pollWritePollFile,
+            ConfigEntry<string> displayLanguage)
         {
             LethalConfigManager.SkipAutoGen();
 
@@ -96,6 +97,7 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickCluster, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollNoVotesBehavior, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollBlocklist, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(displayLanguage, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new GenericButtonConfigItem(
                 "Kick",
