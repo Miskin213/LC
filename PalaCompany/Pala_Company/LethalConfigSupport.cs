@@ -26,7 +26,14 @@ namespace PalaCompany
             ConfigEntry<string> kickChatroomId,
             ConfigEntry<string> kickAppKey,
             ConfigEntry<string> kickCluster,
-            Action restartKick)
+            Action restartKick,
+            ConfigEntry<bool> pollEnabled,
+            ConfigEntry<float> pollCycleSeconds,
+            ConfigEntry<float> pollVoteSeconds,
+            ConfigEntry<bool> pollAllowVoteChange,
+            ConfigEntry<string> pollNoVotesBehavior,
+            ConfigEntry<string> pollBlocklist,
+            ConfigEntry<bool> pollWritePollFile)
         {
             LethalConfigManager.SkipAutoGen();
 
@@ -60,11 +67,26 @@ namespace PalaCompany
                 Max = 50f,
                 RequiresRestart = false
             }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollCycleSeconds, new FloatSliderOptions
+            {
+                Min = 5f,
+                Max = 600f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollVoteSeconds, new FloatSliderOptions
+            {
+                Min = 5f,
+                Max = 300f,
+                RequiresRestart = false
+            }));
 
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(enableDebugKeys, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(countOnlyModEnemies, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(showSpawnTips, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(kickEnabled, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollEnabled, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollAllowVoteChange, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollWritePollFile, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(prefix, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(blocklist, requiresRestart: false));
@@ -72,6 +94,8 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickChatroomId, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickAppKey, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickCluster, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollNoVotesBehavior, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollBlocklist, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new GenericButtonConfigItem(
                 "Kick",

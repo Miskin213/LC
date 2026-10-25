@@ -60,7 +60,11 @@ namespace PalaCompany
         private ConfigEntry<int> maxLive, defaultPerEnemyMax;
         private ConfigEntry<bool> enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled;
         private ConfigEntry<bool> logMenuHierarchy, customTitle;
+        private ConfigEntry<bool> pollEnabled, pollAllowVoteChange, pollWritePollFile;
+        private ConfigEntry<float> pollCycleSeconds, pollVoteSeconds;
+        private ConfigEntry<string> pollNoVotesBehavior, pollBlocklist;
         private KickChatClient kickChatClient;
+        private Poll poll;
         private bool kickChatStopped;
 
         private readonly Dictionary<string, float> lastByUser = new Dictionary<string, float>();
@@ -91,13 +95,28 @@ namespace PalaCompany
             kickChatroomId = Config.Bind("Kick", "ChatroomId", "0", "Kick chatroom ID.");
             kickAppKey = Config.Bind("Kick", "AppKey", "34bf7a0ff419a2a775b9", "Kick Pusher app key.");
             kickCluster = Config.Bind("Kick", "Cluster", "us2", "Kick Pusher cluster.");
+            pollEnabled = Config.Bind("Poll", "Enabled", false, "Enable periodic chat polls.");
+            pollCycleSeconds = Config.Bind("Poll", "CycleSeconds", 60f, "Seconds between polls.");
+            pollVoteSeconds = Config.Bind("Poll", "VoteSeconds", 45f, "Seconds votes remain open.");
+            pollAllowVoteChange = Config.Bind("Poll", "AllowVoteChange", true, "Allow viewers to change their vote.");
+            pollNoVotesBehavior = Config.Bind("Poll", "NoVotesBehavior", "Random", "Choose Random or Skip when a poll receives no votes.");
+            pollBlocklist = Config.Bind("Poll", "PollBlocklist", "", "Comma-separated enemies that are never offered in polls.");
+            pollWritePollFile = Config.Bind("Poll", "WritePollFile", true, "Write poll status to pala_poll.txt in the BepInEx config folder.");
+            poll = new Poll(
+                Logger.LogInfo,
+                GetPollCandidates,
+                SpawnPollWinner,
+                ShowPollTip,
+                Path.Combine(Paths.ConfigPath, "pala_poll.txt"));
             if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("ainavt.lc.lethalconfig"))
             {
                 LethalConfigSupport.Register(
                     userCooldown, globalCooldown, maxLive, spawnRadius, perEnemyLimits, defaultPerEnemyMax,
                     enableDebugKeys, countOnlyModEnemies, showSpawnTips, kickEnabled,
                     prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
-                    RestartKick);
+                    RestartKick,
+                    pollEnabled, pollCycleSeconds, pollVoteSeconds, pollAllowVoteChange,
+                    pollNoVotesBehavior, pollBlocklist, pollWritePollFile);
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (kickEnabled.Value) StartKickClient();
@@ -346,7 +365,25 @@ namespace PalaCompany
                         Logger.LogInfo("[fake] spammer: !spawn hoarding bug");
                         EnqueueChat("spammer", "!spawn hoarding bug");
                     }
+                    if (kb.f5Key.wasPressedThisFrame)
+                        poll.CastVote("pollviewer" + (++fakeViewer), 1, pollAllowVoteChange.Value);
+                    if (kb.f6Key.wasPressedThisFrame)
+                        poll.CastVote("pollviewer" + (++fakeViewer), 2, pollAllowVoteChange.Value);
                 }
+
+                bool forcePollToggle = enableDebugKeys.Value && kb != null && kb.f7Key.wasPressedThisFrame;
+                var roundManager = RoundManager.Instance;
+                var startOfRound = StartOfRound.Instance;
+                bool hostInRound = roundManager != null && roundManager.IsServer
+                    && startOfRound != null && startOfRound.shipHasLanded;
+                poll.Update(
+                    pollEnabled.Value,
+                    hostInRound,
+                    pollCycleSeconds.Value,
+                    pollVoteSeconds.Value,
+                    pollNoVotesBehavior.Value,
+                    pollWritePollFile.Value,
+                    forcePollToggle);
 
                 int handled = 0;
                 while (handled < 3 && Inbox.TryDequeue(out var msg))
@@ -445,6 +482,13 @@ namespace PalaCompany
         private void Handle(ChatMessage msg)
         {
             string text = (msg.Text ?? "").Trim();
+            if (Poll.TryParseVote(text, out int option))
+            {
+                if (poll.IsOpen)
+                    poll.CastVote(msg.User, option, pollAllowVoteChange.Value);
+                return;
+            }
+
             string pre = prefix.Value.Trim();
             if (!text.StartsWith(pre + " ", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -454,6 +498,39 @@ namespace PalaCompany
             if (!TryResolveEnemyType(arg, out var type)) { Reject(msg.User, "unknown enemy '" + arg + "'"); return; }
 
             TrySpawn(msg.User, type, true, out _);
+        }
+
+        private IList<EnemyType> GetPollCandidates()
+        {
+            var excludedNames = new HashSet<string>(StringComparer.Ordinal);
+            var excludedTypes = new HashSet<EnemyType>();
+            foreach (var name in (blocklist.Value + "," + pollBlocklist.Value).Split(','))
+            {
+                string normalized = Norm(name);
+                if (normalized.Length == 0) continue;
+                excludedNames.Add(normalized);
+                if (TryResolveEnemyType(name, out var excludedType))
+                    excludedTypes.Add(excludedType);
+            }
+
+            return GetEnemyTypes().Values
+                .Where(type => type != null
+                    && !excludedNames.Contains(Norm(type.enemyName))
+                    && !excludedTypes.Contains(type)
+                    && IsSpawnableNow(type))
+                .Distinct()
+                .ToList();
+        }
+
+        private string SpawnPollWinner(EnemyType winner)
+        {
+            return TrySpawn("poll", winner, false, out string reason) ? null : reason;
+        }
+
+        private void ShowPollTip(string header, string body)
+        {
+            if (HUDManager.Instance != null)
+                HUDManager.Instance.DisplayTip(header, body);
         }
 
         public bool IsSpawnableNow(EnemyType type)
@@ -579,7 +656,7 @@ namespace PalaCompany
                 return false;
             }
             modSpawnedEnemies.Add(spawnedEnemy);
-            if (showSpawnTips.Value && HUDManager.Instance != null)
+            if (showSpawnTips.Value && requester != "poll" && HUDManager.Instance != null)
                 HUDManager.Instance.DisplayTip(requester, type.enemyName);
             Logger.LogInfo("[spawned] " + type.enemyName + " for " + requester
                 + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
