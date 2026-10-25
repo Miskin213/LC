@@ -22,6 +22,7 @@
     <Reference Include="UnityEngine.AIModule"><HintPath>$(GameManaged)\UnityEngine.AIModule.dll</HintPath></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(GameManaged)\Newtonsoft.Json.dll</HintPath></Reference>
     <Reference Include="LethalConfig"><HintPath>libs\LethalConfig.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(GameManaged)\UnityEngine.AudioModule.dll</HintPath></Reference>
     <EmbeddedResource Include="title.png" Condition="Exists('title.png')" />
   </ItemGroup>
 

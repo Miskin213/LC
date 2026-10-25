@@ -27,7 +27,23 @@ namespace PalaCompany
             { "poll.result.tip.skipped.header", "POLL: skipped" },
             { "poll.result.tip.skipped.body", "No votes; poll skipped. {0}" },
             { "poll.spawn.failed", "\nCouldn't spawn {0}: {1}" },
-            { "poll.file.open", "POLL - {0}s left\n1) {1} - {2} votes\n2) {3} - {4} votes" }
+            { "poll.file.open", "POLL - {0}s left\n1) {1} - {2} votes\n2) {3} - {4} votes" },
+            { "poll.hud.title", "POLL - {0}s" },
+            { "poll.hud.option", "{0}  {1}  {2} votes ({3}%)" },
+            { "poll.hud.option.leading", "<color=#FFD166>{0}</color>" },
+            { "poll.hud.command1", "!1" },
+            { "poll.hud.command2", "!2" },
+            { "poll.debug.option1", "Jester" },
+            { "poll.debug.option2", "Bracken" },
+            { "poll.hud.latest", "Latest: {0} -> {1}" },
+            { "poll.hud.latest.none", "Latest: -" },
+            { "poll.hud.result", "{0}\n{1}{2}" },
+            { "poll.hud.result.header", "RESULT" },
+            { "poll.hud.result.won", "{0} won ({1} votes)" },
+            { "poll.hud.result.target", "\nSpawned near {0}" },
+            { "poll.hud.result.failure", "\n{0}" },
+            { "poll.hud.result.skipped", "{0}\n{1}" },
+            { "poll.hud.result.skipped.body", "Poll skipped (no votes)" }
         };
 
         private static readonly Dictionary<string, string> Turkish = new Dictionary<string, string>();

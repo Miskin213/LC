@@ -65,9 +65,16 @@ namespace PalaCompany
         private ConfigEntry<string> pollNoVotesBehavior, pollBlocklist;
         private ConfigEntry<int> pollMaxPollsPerRound;
         private ConfigEntry<bool> pollShowTargetPlayer, spawnCommandEnabled;
+        private ConfigEntry<bool> pollHudEnabled;
+        private ConfigEntry<string> pollHudAnchor;
+        private ConfigEntry<float> pollHudOffsetX, pollHudOffsetY, pollHudFontSize, pollHudOpacity;
+        private ConfigEntry<bool> pollHudShowBorder, pollHudShowLatestVote;
+        private ConfigEntry<float> pollHudBorderThickness, pollHudBoxWidth, pollHudPadding;
+        private ConfigEntry<string> pollHudBorderColor;
         private ConfigEntry<string> displayLanguage;
         private KickChatClient kickChatClient;
         private Poll poll;
+        private PollHud pollHud;
         private bool kickChatStopped;
 
         private readonly Dictionary<string, float> lastByUser = new Dictionary<string, float>();
@@ -112,12 +119,25 @@ namespace PalaCompany
             pollBlocklist = Config.Bind("Poll", "PollBlocklist", "", "Comma-separated enemies that are never offered in polls.");
             pollWritePollFile = Config.Bind("Poll", "WritePollFile", true, "Write poll status to pala_poll.txt in the BepInEx config folder.");
             pollShowTargetPlayer = Config.Bind("Poll", "ShowTargetPlayer", true, "Include the targeted player in the poll result tip.");
+            pollHudEnabled = Config.Bind("PollHud", "Enabled", true, "Show the poll status widget on the host HUD.");
+            pollHudAnchor = Config.Bind("PollHud", "Anchor", "TopRight", "Poll widget screen anchor: TopLeft, TopRight, BottomLeft, or BottomRight.");
+            pollHudOffsetX = Config.Bind("PollHud", "OffsetX", 20f, "Horizontal poll widget offset from its anchor.");
+            pollHudOffsetY = Config.Bind("PollHud", "OffsetY", -120f, "Vertical poll widget offset from its anchor.");
+            pollHudFontSize = Config.Bind("PollHud", "FontSize", 22f, "Poll widget font size.");
+            pollHudOpacity = Config.Bind("PollHud", "Opacity", 1f, "Poll widget opacity from 0 to 1.");
+            pollHudShowBorder = Config.Bind("PollHud", "ShowBorder", true, "Draw a border around the poll widget.");
+            pollHudBorderThickness = Config.Bind("PollHud", "BorderThickness", 2f, "Poll widget border thickness.");
+            pollHudBorderColor = Config.Bind("PollHud", "BorderColor", "#FFFFFF", "Poll widget border color in hex.");
+            pollHudBoxWidth = Config.Bind("PollHud", "BoxWidth", 360f, "Fixed width of the poll widget.");
+            pollHudPadding = Config.Bind("PollHud", "Padding", 10f, "Spacing between the widget border and its text.");
+            pollHudShowLatestVote = Config.Bind("PollHud", "ShowLatestVote", true, "Show the latest counted poll vote.");
             poll = new Poll(
                 Logger.LogInfo,
                 GetPollCandidates,
                 SpawnPollWinner,
-                ShowPollTip,
+                PlayPollSound,
                 Path.Combine(Paths.ConfigPath, "pala_poll.txt"));
+            pollHud = new PollHud(Logger.LogError);
             if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("ainavt.lc.lethalconfig"))
             {
                 LethalConfigSupport.Register(
@@ -127,7 +147,11 @@ namespace PalaCompany
                     RestartKick,
                     pollEnabled, pollCycleSeconds, pollVoteSeconds, pollAllowVoteChange,
                     pollNoVotesBehavior, pollBlocklist, pollWritePollFile, displayLanguage,
-                    pollMaxPollsPerRound, pollShowTargetPlayer, spawnCommandEnabled);
+                    pollMaxPollsPerRound, pollShowTargetPlayer, spawnCommandEnabled,
+                    pollHudEnabled, pollHudAnchor, pollHudOffsetX, pollHudOffsetY,
+                    pollHudFontSize, pollHudOpacity, pollHudShowBorder,
+                    pollHudBorderThickness, pollHudBorderColor, pollHudBoxWidth,
+                    pollHudPadding, pollHudShowLatestVote);
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (kickEnabled.Value) StartKickClient();
@@ -360,6 +384,11 @@ namespace PalaCompany
         {
             try
             {
+                var roundManager = RoundManager.Instance;
+                var startOfRound = StartOfRound.Instance;
+                bool hostInRound = roundManager != null && roundManager.IsServer
+                    && startOfRound != null && startOfRound.shipHasLanded;
+
                 var kb = Keyboard.current;
                 if (enableDebugKeys.Value && kb != null)
                 {
@@ -380,13 +409,11 @@ namespace PalaCompany
                         poll.CastVote("pollviewer" + (++fakeViewer), 1, pollAllowVoteChange.Value);
                     if (kb.f6Key.wasPressedThisFrame)
                         poll.CastVote("pollviewer" + (++fakeViewer), 2, pollAllowVoteChange.Value);
+                    if (hostInRound && kb.f8Key.wasPressedThisFrame)
+                        poll.ShowDebugPreview(15f);
                 }
 
                 bool forcePollToggle = enableDebugKeys.Value && kb != null && kb.f7Key.wasPressedThisFrame;
-                var roundManager = RoundManager.Instance;
-                var startOfRound = StartOfRound.Instance;
-                bool hostInRound = roundManager != null && roundManager.IsServer
-                    && startOfRound != null && startOfRound.shipHasLanded;
                 poll.Update(
                     pollEnabled.Value,
                     hostInRound,
@@ -398,6 +425,20 @@ namespace PalaCompany
                     pollShowTargetPlayer.Value,
                     pollWritePollFile.Value,
                     forcePollToggle);
+                pollHud.Update(
+                    hostInRound ? poll.GetHudState() : PollHudState.Hidden,
+                    pollHudEnabled.Value,
+                    pollHudAnchor.Value,
+                    pollHudOffsetX.Value,
+                    pollHudOffsetY.Value,
+                    pollHudFontSize.Value,
+                    pollHudOpacity.Value,
+                    pollHudShowBorder.Value,
+                    pollHudBorderThickness.Value,
+                    pollHudBorderColor.Value,
+                    pollHudBoxWidth.Value,
+                    pollHudPadding.Value,
+                    pollHudShowLatestVote.Value);
 
                 int handled = 0;
                 while (handled < 3 && Inbox.TryDequeue(out var msg))
@@ -558,10 +599,11 @@ namespace PalaCompany
             };
         }
 
-        private void ShowPollTip(string header, string body)
+        private void PlayPollSound()
         {
-            if (HUDManager.Instance != null)
-                HUDManager.Instance.DisplayTip(header, body);
+            var hud = HUDManager.Instance;
+            if (hud != null && hud.UIAudio != null && hud.tipsSFX != null && hud.tipsSFX.Length > 0)
+                RoundManager.PlayRandomClip(hud.UIAudio, hud.tipsSFX, randomize: false);
         }
 
         private void UpdateLanguage()

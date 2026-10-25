@@ -6,6 +6,28 @@ using UnityEngine;
 
 namespace PalaCompany
 {
+    internal enum PollHudPhase
+    {
+        Hidden,
+        Open,
+        Result
+    }
+
+    internal sealed class PollHudState
+    {
+        internal PollHudPhase Phase;
+        internal string Option1;
+        internal string Option2;
+        internal int Votes1;
+        internal int Votes2;
+        internal float SecondsLeft;
+        internal string ResultText;
+        internal string LatestVoteUsername;
+        internal string LatestVoteOption;
+
+        internal static PollHudState Hidden => new PollHudState { Phase = PollHudPhase.Hidden };
+    }
+
     internal sealed class PollSpawnResult
     {
         internal bool Spawned;
@@ -18,7 +40,7 @@ namespace PalaCompany
         private readonly Action<string> _log;
         private readonly Func<IList<EnemyType>> _getCandidates;
         private readonly Func<EnemyType, PollSpawnResult> _trySpawn;
-        private readonly Action<string, string> _showTip;
+        private readonly Action _playSound;
         private readonly string _filePath;
         private readonly System.Random _random = new System.Random();
         private readonly Dictionary<string, int> _votes =
@@ -29,7 +51,9 @@ namespace PalaCompany
         private float _voteRemaining;
         private float _cycleRemaining;
         private float _resultRemaining;
+        private float _hudResultRemaining;
         private float _lastUpdateTime;
+        private float _previewRemaining;
         private float _lastFileUpdateTime = float.NegativeInfinity;
         private bool _hasUpdatedTime;
         private bool _cycleInitialized;
@@ -40,23 +64,77 @@ namespace PalaCompany
         private bool _loggedFileError;
         private int _pollsOpenedThisRound;
         private string _resultText = "";
+        private string _hudResultText = "";
+        private string _resultTargetPlayer;
+        private string _latestVoteUsername;
+        private int _latestVoteOption;
         private string _lastFileText;
 
         internal Poll(
             Action<string> log,
             Func<IList<EnemyType>> getCandidates,
             Func<EnemyType, PollSpawnResult> trySpawn,
-            Action<string, string> showTip,
+            Action playSound,
             string filePath)
         {
             _log = log;
             _getCandidates = getCandidates;
             _trySpawn = trySpawn;
-            _showTip = showTip;
+            _playSound = playSound;
             _filePath = filePath;
         }
 
         internal bool IsOpen => _option1 != null && _option2 != null;
+
+        internal void ShowDebugPreview(float seconds)
+        {
+            _previewRemaining = Math.Max(0f, seconds);
+        }
+
+        internal PollHudState GetHudState()
+        {
+            if (_previewRemaining > 0f)
+            {
+                return new PollHudState
+                {
+                    Phase = PollHudPhase.Open,
+                    Option1 = Loc.T("poll.debug.option1"),
+                    Option2 = Loc.T("poll.debug.option2"),
+                    Votes1 = 5,
+                    Votes2 = 3,
+                    SecondsLeft = _previewRemaining,
+                    LatestVoteUsername = null,
+                    LatestVoteOption = null
+                };
+            }
+
+            if (IsOpen)
+            {
+                return new PollHudState
+                {
+                    Phase = PollHudPhase.Open,
+                    Option1 = _option1.enemyName,
+                    Option2 = _option2.enemyName,
+                    Votes1 = _votes.Count(vote => vote.Value == 1),
+                    Votes2 = _votes.Count(vote => vote.Value == 2),
+                    SecondsLeft = _voteRemaining,
+                    LatestVoteUsername = _latestVoteUsername,
+                    LatestVoteOption = _latestVoteOption == 1 ? _option1.enemyName
+                        : _latestVoteOption == 2 ? _option2.enemyName : null
+                };
+            }
+
+            if (_hudResultRemaining > 0f)
+            {
+                return new PollHudState
+                {
+                    Phase = PollHudPhase.Result,
+                    ResultText = _hudResultText
+                };
+            }
+
+            return PollHudState.Hidden;
+        }
 
         internal static bool TryParseVote(string text, out int option)
         {
@@ -84,6 +162,8 @@ namespace PalaCompany
             if (_votes.ContainsKey(username) && !allowVoteChange)
                 return false;
             _votes[username] = option;
+            _latestVoteUsername = username;
+            _latestVoteOption = option;
             return true;
         }
 
@@ -103,7 +183,6 @@ namespace PalaCompany
             float elapsed = _hasUpdatedTime ? Math.Max(0f, now - _lastUpdateTime) : 0f;
             _lastUpdateTime = now;
             _hasUpdatedTime = true;
-
             if (shipHasLanded && !_previousShipLanded)
             {
                 _pollsOpenedThisRound = 0;
@@ -113,6 +192,7 @@ namespace PalaCompany
 
             if (!hostInRound)
             {
+                _previewRemaining = 0f;
                 if (IsOpen)
                 {
                     _log("Poll cancelled because the host is no longer in a landed round.");
@@ -122,6 +202,9 @@ namespace PalaCompany
                 UpdatePollFile(now, writePollFile);
                 return;
             }
+
+            if (_previewRemaining > 0f)
+                _previewRemaining = Math.Max(0f, _previewRemaining - elapsed);
 
             if (forceToggle)
             {
@@ -147,6 +230,8 @@ namespace PalaCompany
                 if (_resultRemaining == 0f)
                     _resultText = "";
             }
+            if (_hudResultRemaining > 0f)
+                _hudResultRemaining = Math.Max(0f, _hudResultRemaining - elapsed);
 
             if (IsOpen && !enabled && !_debugForced)
             {
@@ -210,15 +295,17 @@ namespace PalaCompany
             candidates.RemoveAt(first);
             _option2 = candidates[_random.Next(candidates.Count)];
             _votes.Clear();
+            _latestVoteUsername = null;
+            _latestVoteOption = 0;
             _pollsOpenedThisRound++;
             if (maxPollsPerRound > 0 && _pollsOpenedThisRound >= maxPollsPerRound)
                 LogPollLimitReached();
             _voteRemaining = Math.Max(1f, voteSeconds);
             _resultRemaining = 0f;
+            _hudResultRemaining = 0f;
             _resultText = "";
-            _showTip(
-                Loc.T("poll.open.header"),
-                Loc.T("poll.open.body", _option1.enemyName, _option2.enemyName));
+            _hudResultText = "";
+            _playSound();
             return true;
         }
 
@@ -235,6 +322,9 @@ namespace PalaCompany
 
             int votes1 = _votes.Count(vote => vote.Value == 1);
             int votes2 = _votes.Count(vote => vote.Value == 2);
+            _playSound();
+            string option1Name = _option1.enemyName;
+            string option2Name = _option2.enemyName;
             EnemyType winner = null;
             if (votes1 == 0 && votes2 == 0)
             {
@@ -252,13 +342,18 @@ namespace PalaCompany
 
             string voteSummary = Loc.T(
                 "poll.vote.summary",
-                _option1.enemyName,
+                option1Name,
                 votes1,
-                _option2.enemyName,
+                option2Name,
                 votes2);
             if (winner == null)
             {
                 _resultText = Loc.T("poll.result.file.skipped");
+                _hudResultText = Loc.T(
+                    "poll.hud.result",
+                    Loc.T("poll.hud.result.header"),
+                    Loc.T("poll.hud.result.skipped.body"),
+                    "");
                 _log("Poll closed with no votes; skipped.");
             }
             else
@@ -266,19 +361,16 @@ namespace PalaCompany
                 _resultText = Loc.T("poll.result.file.winner", winner.enemyName, voteSummary);
             }
 
+            _resultTargetPlayer = null;
             ClearOpenPoll();
             _resultRemaining = 10f;
+            _hudResultRemaining = 8f;
             _cycleRemaining = Math.Max(1f, cycleSeconds);
             _cycleInitialized = true;
             _debugForced = false;
 
             if (winner == null)
-            {
-                _showTip(
-                    Loc.T("poll.result.tip.skipped.header"),
-                    Loc.T("poll.result.tip.skipped.body", voteSummary));
                 return;
-            }
 
             var spawnResult = _trySpawn(winner);
             string failureReason = spawnResult != null && spawnResult.Spawned
@@ -292,16 +384,23 @@ namespace PalaCompany
             if (!string.IsNullOrEmpty(failureReason))
                 _log("Poll spawn failed: " + failureReason);
 
-            string resultBody = voteSummary;
+            _resultTargetPlayer = spawnResult != null && spawnResult.Spawned
+                ? spawnResult.TargetPlayerName
+                : null;
+            string resultLine = Loc.T(
+                "poll.hud.result.won",
+                winner.enemyName,
+                votes1 > votes2 ? votes1 : votes2);
+            string detailLine = "";
             if (!string.IsNullOrEmpty(failureReason))
-                resultBody += Loc.T("poll.spawn.failed", winner.enemyName, failureReason);
-            string resultHeader = showTargetPlayer
-                && spawnResult != null
-                && spawnResult.Spawned
-                && !string.IsNullOrEmpty(spawnResult.TargetPlayerName)
-                    ? Loc.T("tip.spawn.header", winner.enemyName + " spawned near " + spawnResult.TargetPlayerName)
-                    : Loc.T("poll.result.tip.winner.header", winner.enemyName);
-            _showTip(resultHeader, resultBody);
+                detailLine = Loc.T("poll.hud.result.failure", failureReason);
+            else if (showTargetPlayer && !string.IsNullOrEmpty(_resultTargetPlayer))
+                detailLine = Loc.T("poll.hud.result.target", _resultTargetPlayer);
+            _hudResultText = Loc.T(
+                "poll.hud.result",
+                Loc.T("poll.hud.result.header"),
+                resultLine,
+                detailLine);
         }
 
         private void ClearOpenPoll()

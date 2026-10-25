@@ -37,7 +37,19 @@ namespace PalaCompany
             ConfigEntry<string> displayLanguage,
             ConfigEntry<int> pollMaxPollsPerRound,
             ConfigEntry<bool> pollShowTargetPlayer,
-            ConfigEntry<bool> spawnCommandEnabled)
+            ConfigEntry<bool> spawnCommandEnabled,
+            ConfigEntry<bool> pollHudEnabled,
+            ConfigEntry<string> pollHudAnchor,
+            ConfigEntry<float> pollHudOffsetX,
+            ConfigEntry<float> pollHudOffsetY,
+            ConfigEntry<float> pollHudFontSize,
+            ConfigEntry<float> pollHudOpacity,
+            ConfigEntry<bool> pollHudShowBorder,
+            ConfigEntry<float> pollHudBorderThickness,
+            ConfigEntry<string> pollHudBorderColor,
+            ConfigEntry<float> pollHudBoxWidth,
+            ConfigEntry<float> pollHudPadding,
+            ConfigEntry<bool> pollHudShowLatestVote)
         {
             LethalConfigManager.SkipAutoGen();
 
@@ -89,6 +101,48 @@ namespace PalaCompany
                 Max = 300f,
                 RequiresRestart = false
             }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudOffsetX, new FloatSliderOptions
+            {
+                Min = -1000f,
+                Max = 1000f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudOffsetY, new FloatSliderOptions
+            {
+                Min = -1000f,
+                Max = 1000f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudFontSize, new FloatSliderOptions
+            {
+                Min = 8f,
+                Max = 48f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudOpacity, new FloatSliderOptions
+            {
+                Min = 0f,
+                Max = 1f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudBorderThickness, new FloatSliderOptions
+            {
+                Min = 0f,
+                Max = 10f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudBoxWidth, new FloatSliderOptions
+            {
+                Min = 120f,
+                Max = 1000f,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(pollHudPadding, new FloatSliderOptions
+            {
+                Min = 0f,
+                Max = 80f,
+                RequiresRestart = false
+            }));
 
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(enableDebugKeys, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(countOnlyModEnemies, requiresRestart: false));
@@ -99,6 +153,9 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollWritePollFile, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollShowTargetPlayer, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(spawnCommandEnabled, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollHudEnabled, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollHudShowBorder, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollHudShowLatestVote, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(prefix, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(blocklist, requiresRestart: false));
@@ -109,6 +166,8 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollNoVotesBehavior, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollBlocklist, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(displayLanguage, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollHudAnchor, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollHudBorderColor, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new GenericButtonConfigItem(
                 "Kick",
