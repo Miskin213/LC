@@ -62,16 +62,17 @@ namespace PalaCompany
         private ConfigEntry<bool> logMenuHierarchy, customTitle;
         private ConfigEntry<bool> pollEnabled, pollAllowVoteChange, pollWritePollFile;
         private ConfigEntry<float> pollCycleSeconds, pollVoteSeconds;
-        private ConfigEntry<string> pollNoVotesBehavior, pollBlocklist;
+        private ConfigEntry<NoVotesOption> pollNoVotesBehavior;
+        private ConfigEntry<string> pollBlocklist;
         private ConfigEntry<int> pollMaxPollsPerRound;
         private ConfigEntry<bool> pollShowTargetPlayer, spawnCommandEnabled;
         private ConfigEntry<bool> pollHudEnabled;
-        private ConfigEntry<string> pollHudAnchor;
+        private ConfigEntry<HudAnchor> pollHudAnchor;
         private ConfigEntry<float> pollHudOffsetX, pollHudOffsetY, pollHudFontSize, pollHudOpacity;
         private ConfigEntry<bool> pollHudShowBorder, pollHudShowLatestVote;
         private ConfigEntry<float> pollHudBorderThickness, pollHudBoxWidth, pollHudPadding;
         private ConfigEntry<string> pollHudBorderColor;
-        private ConfigEntry<string> displayLanguage;
+        private ConfigEntry<LanguageOption> displayLanguage;
         private KickChatClient kickChatClient;
         private Poll poll;
         private PollHud pollHud;
@@ -101,7 +102,7 @@ namespace PalaCompany
             enableDebugKeys = Config.Bind("Debug", "EnableDebugKeys", false, "Enable F9/F10/F11 debug keys.");
             countOnlyModEnemies = Config.Bind("Limits", "CountOnlyModEnemies", true, "Count only enemies spawned by this mod toward the live enemy limit.");
             showSpawnTips = Config.Bind("Display", "ShowSpawnTips", true, "Show a HUD tip after a successful spawn.");
-            displayLanguage = Config.Bind("Display", "Language", "English", "Language used for player-facing text (English or Turkish).");
+            displayLanguage = Config.Bind("Display", "Language", LanguageOption.English, "Language used for player-facing text (English or Turkish).");
             UpdateLanguage();
             displayLanguage.SettingChanged += (_, __) => UpdateLanguage();
             logMenuHierarchy = Config.Bind("Menu", "LogHierarchy", false, "Log UI hierarchy details when the MainMenu scene loads.");
@@ -115,20 +116,20 @@ namespace PalaCompany
             pollVoteSeconds = Config.Bind("Poll", "VoteSeconds", 45f, "Seconds votes remain open.");
             pollMaxPollsPerRound = Config.Bind("Poll", "MaxPollsPerRound", 0, "Maximum polls per round; 0 is unlimited.");
             pollAllowVoteChange = Config.Bind("Poll", "AllowVoteChange", true, "Allow viewers to change their vote.");
-            pollNoVotesBehavior = Config.Bind("Poll", "NoVotesBehavior", "Random", "Choose Random or Skip when a poll receives no votes.");
+            pollNoVotesBehavior = Config.Bind("Poll", "NoVotesBehavior", NoVotesOption.Random, "Choose Random or Skip when a poll receives no votes.");
             pollBlocklist = Config.Bind("Poll", "PollBlocklist", "", "Comma-separated enemies that are never offered in polls.");
             pollWritePollFile = Config.Bind("Poll", "WritePollFile", true, "Write poll status to pala_poll.txt in the BepInEx config folder.");
             pollShowTargetPlayer = Config.Bind("Poll", "ShowTargetPlayer", true, "Include the targeted player in the poll result tip.");
             pollHudEnabled = Config.Bind("PollHud", "Enabled", true, "Show the poll status widget on the host HUD.");
-            pollHudAnchor = Config.Bind("PollHud", "Anchor", "TopRight", "Poll widget screen anchor: TopLeft, TopRight, BottomLeft, or BottomRight.");
+            pollHudAnchor = Config.Bind("PollHud", "Anchor", HudAnchor.TopRight, "Poll widget screen anchor: TopLeft, TopRight, BottomLeft, or BottomRight.");
             pollHudOffsetX = Config.Bind("PollHud", "OffsetX", 20f, "Horizontal poll widget offset from its anchor.");
-            pollHudOffsetY = Config.Bind("PollHud", "OffsetY", -120f, "Vertical poll widget offset from its anchor.");
+            pollHudOffsetY = Config.Bind("PollHud", "OffsetY", -140f, "Vertical poll widget offset from its anchor.");
             pollHudFontSize = Config.Bind("PollHud", "FontSize", 22f, "Poll widget font size.");
             pollHudOpacity = Config.Bind("PollHud", "Opacity", 1f, "Poll widget opacity from 0 to 1.");
             pollHudShowBorder = Config.Bind("PollHud", "ShowBorder", true, "Draw a border around the poll widget.");
             pollHudBorderThickness = Config.Bind("PollHud", "BorderThickness", 2f, "Poll widget border thickness.");
-            pollHudBorderColor = Config.Bind("PollHud", "BorderColor", "#FFFFFF", "Poll widget border color in hex.");
-            pollHudBoxWidth = Config.Bind("PollHud", "BoxWidth", 360f, "Fixed width of the poll widget.");
+            pollHudBorderColor = Config.Bind("PollHud", "BorderColor", "#D6671F", "Poll widget border color in hex.");
+            pollHudBoxWidth = Config.Bind("PollHud", "BoxWidth", 260f, "Fixed width of the poll widget.");
             pollHudPadding = Config.Bind("PollHud", "Padding", 10f, "Spacing between the widget border and its text.");
             pollHudShowLatestVote = Config.Bind("PollHud", "ShowLatestVote", true, "Show the latest counted poll vote.");
             poll = new Poll(
@@ -421,14 +422,18 @@ namespace PalaCompany
                     pollCycleSeconds.Value,
                     pollVoteSeconds.Value,
                     pollMaxPollsPerRound.Value,
-                    pollNoVotesBehavior.Value,
+                    Enum.IsDefined(typeof(NoVotesOption), pollNoVotesBehavior.Value)
+                        ? pollNoVotesBehavior.Value
+                        : NoVotesOption.Random,
                     pollShowTargetPlayer.Value,
                     pollWritePollFile.Value,
                     forcePollToggle);
                 pollHud.Update(
                     hostInRound ? poll.GetHudState() : PollHudState.Hidden,
                     pollHudEnabled.Value,
-                    pollHudAnchor.Value,
+                    Enum.IsDefined(typeof(HudAnchor), pollHudAnchor.Value)
+                        ? pollHudAnchor.Value
+                        : HudAnchor.TopRight,
                     pollHudOffsetX.Value,
                     pollHudOffsetY.Value,
                     pollHudFontSize.Value,
@@ -608,9 +613,9 @@ namespace PalaCompany
 
         private void UpdateLanguage()
         {
-            Loc.Current = string.Equals(displayLanguage.Value, "Turkish", StringComparison.OrdinalIgnoreCase)
-                ? Loc.Language.Turkish
-                : Loc.Language.English;
+            Loc.Current = Enum.IsDefined(typeof(LanguageOption), displayLanguage.Value)
+                ? displayLanguage.Value
+                : LanguageOption.English;
         }
 
         public bool IsSpawnableNow(EnemyType type)

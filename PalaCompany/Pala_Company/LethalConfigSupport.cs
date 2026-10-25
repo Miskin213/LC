@@ -31,15 +31,15 @@ namespace PalaCompany
             ConfigEntry<float> pollCycleSeconds,
             ConfigEntry<float> pollVoteSeconds,
             ConfigEntry<bool> pollAllowVoteChange,
-            ConfigEntry<string> pollNoVotesBehavior,
+            ConfigEntry<NoVotesOption> pollNoVotesBehavior,
             ConfigEntry<string> pollBlocklist,
             ConfigEntry<bool> pollWritePollFile,
-            ConfigEntry<string> displayLanguage,
+            ConfigEntry<LanguageOption> displayLanguage,
             ConfigEntry<int> pollMaxPollsPerRound,
             ConfigEntry<bool> pollShowTargetPlayer,
             ConfigEntry<bool> spawnCommandEnabled,
             ConfigEntry<bool> pollHudEnabled,
-            ConfigEntry<string> pollHudAnchor,
+            ConfigEntry<HudAnchor> pollHudAnchor,
             ConfigEntry<float> pollHudOffsetX,
             ConfigEntry<float> pollHudOffsetY,
             ConfigEntry<float> pollHudFontSize,
@@ -163,10 +163,10 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickChatroomId, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickAppKey, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(kickCluster, requiresRestart: false));
-            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollNoVotesBehavior, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new EnumDropDownConfigItem<NoVotesOption>(pollNoVotesBehavior, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollBlocklist, requiresRestart: false));
-            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(displayLanguage, requiresRestart: false));
-            LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollHudAnchor, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new EnumDropDownConfigItem<LanguageOption>(displayLanguage, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new EnumDropDownConfigItem<HudAnchor>(pollHudAnchor, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(pollHudBorderColor, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new GenericButtonConfigItem(

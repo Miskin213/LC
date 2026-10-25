@@ -5,6 +5,14 @@ using UnityEngine.UI;
 
 namespace PalaCompany
 {
+    internal enum HudAnchor
+    {
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight
+    }
+
     internal sealed class PollHud
     {
         private readonly Action<string> _logError;
@@ -23,7 +31,7 @@ namespace PalaCompany
         internal void Update(
             PollHudState state,
             bool enabled,
-            string anchor,
+            HudAnchor anchor,
             float offsetX,
             float offsetY,
             float fontSize,
@@ -154,20 +162,20 @@ namespace PalaCompany
             }
         }
 
-        private void ApplyLayout(string anchor, float offsetX, float offsetY)
+        private void ApplyLayout(HudAnchor anchor, float offsetX, float offsetY)
         {
             Vector2 normalizedAnchor;
             switch (anchor)
             {
-                case "TopLeft":
+                case HudAnchor.TopLeft:
                     normalizedAnchor = new Vector2(0f, 1f);
                     _text.alignment = TextAlignmentOptions.TopLeft;
                     break;
-                case "BottomLeft":
+                case HudAnchor.BottomLeft:
                     normalizedAnchor = new Vector2(0f, 0f);
                     _text.alignment = TextAlignmentOptions.BottomLeft;
                     break;
-                case "BottomRight":
+                case HudAnchor.BottomRight:
                     normalizedAnchor = new Vector2(1f, 0f);
                     _text.alignment = TextAlignmentOptions.BottomRight;
                     break;

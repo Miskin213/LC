@@ -4,15 +4,15 @@ using System.Globalization;
 
 namespace PalaCompany
 {
+    internal enum LanguageOption
+    {
+        English,
+        Turkish
+    }
+
     internal static class Loc
     {
-        internal enum Language
-        {
-            English,
-            Turkish
-        }
-
-        internal static Language Current { get; set; } = Language.English;
+        internal static LanguageOption Current { get; set; } = LanguageOption.English;
 
         private static readonly Dictionary<string, string> English = new Dictionary<string, string>
         {
@@ -51,7 +51,7 @@ namespace PalaCompany
         internal static string T(string key, params object[] args)
         {
             string value = null;
-            if (Current == Language.Turkish)
+            if (Current == LanguageOption.Turkish)
                 Turkish.TryGetValue(key, out value);
             if (value == null)
                 English.TryGetValue(key, out value);

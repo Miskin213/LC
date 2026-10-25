@@ -6,6 +6,12 @@ using UnityEngine;
 
 namespace PalaCompany
 {
+    internal enum NoVotesOption
+    {
+        Random,
+        Skip
+    }
+
     internal enum PollHudPhase
     {
         Hidden,
@@ -174,7 +180,7 @@ namespace PalaCompany
             float cycleSeconds,
             float voteSeconds,
             int maxPollsPerRound,
-            string noVotesBehavior,
+            NoVotesOption noVotesBehavior,
             bool showTargetPlayer,
             bool writePollFile,
             bool forceToggle)
@@ -316,7 +322,7 @@ namespace PalaCompany
             _loggedPollLimitReached = true;
         }
 
-        private void ClosePoll(float cycleSeconds, string noVotesBehavior, bool showTargetPlayer)
+        private void ClosePoll(float cycleSeconds, NoVotesOption noVotesBehavior, bool showTargetPlayer)
         {
             if (!IsOpen) return;
 
@@ -328,7 +334,7 @@ namespace PalaCompany
             EnemyType winner = null;
             if (votes1 == 0 && votes2 == 0)
             {
-                if (string.Equals((noVotesBehavior ?? "").Trim(), "Random", StringComparison.OrdinalIgnoreCase))
+                if (noVotesBehavior == NoVotesOption.Random)
                     winner = _random.Next(2) == 0 ? _option1 : _option2;
             }
             else if (votes1 == votes2)
