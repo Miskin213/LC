@@ -1,14 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="LocalPaths.props" Condition="Exists('LocalPaths.props')" />
+
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>pala_company</AssemblyName>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <GameManaged>C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Lethal Company_Data\Managed</GameManaged>
-    <BepCore>C:\Users\miskin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\pala company mod\BepInEx\core</BepCore>
-    <LethalConfigDll>C:\Users\miskin\AppData\Roaming\Thunderstore Mod Manager\DataFolder\LethalCompany\profiles\pala company mod\BepInEx\plugins\AinaVT-LethalConfig\LethalConfig\LethalConfig.dll</LethalConfigDll>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +21,13 @@
     <Reference Include="Unity.InputSystem"><HintPath>$(GameManaged)\Unity.InputSystem.dll</HintPath></Reference>
     <Reference Include="UnityEngine.AIModule"><HintPath>$(GameManaged)\UnityEngine.AIModule.dll</HintPath></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(GameManaged)\Newtonsoft.Json.dll</HintPath></Reference>
-    <Reference Include="LethalConfig"><HintPath>$(LethalConfigDll).dll</HintPath></Reference>
+    <Reference Include="LethalConfig"><HintPath>libs\LethalConfig.dll</HintPath></Reference>
     <EmbeddedResource Include="title.png" Condition="Exists('title.png')" />
   </ItemGroup>
+
+  <Target Name="ValidateLocalPaths" BeforeTargets="Build">
+    <Error
+      Condition="'$(GameManaged)' == '' or !Exists('$(GameManaged)') or '$(BepCore)' == '' or !Exists('$(BepCore)')"
+      Text="Copy LocalPaths.props.example to LocalPaths.props and set GameManaged (the Lethal Company_Data\Managed folder) and BepCore (the BepInEx\core folder of a profile that has BepInEx installed)." />
+  </Target>
 </Project>

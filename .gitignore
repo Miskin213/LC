@@ -1,4 +1,6 @@
+LocalPaths.props
+libs/
 bin/
 obj/
 .vs/
-libs/
+*.user

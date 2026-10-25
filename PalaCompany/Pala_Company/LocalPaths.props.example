@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <GameManaged>C:\path\to\Lethal Company\Lethal Company_Data\Managed</GameManaged>
+    <BepCore>C:\path\to\BepInEx\core</BepCore>
+  </PropertyGroup>
+</Project>

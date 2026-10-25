@@ -23,7 +23,7 @@ namespace PalaCompany
         public string Text;
     }
 
-    [BepInPlugin("miskin213.pala_company", "Pala Company", "1.0.0")]
+    [BepInPlugin("miskin213.pala_company", "Pala Company", "1.0.1")]
     [BepInDependency("ainavt.lc.lethalconfig", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
