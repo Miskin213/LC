@@ -63,6 +63,8 @@ namespace PalaCompany
         private ConfigEntry<bool> pollEnabled, pollAllowVoteChange, pollWritePollFile;
         private ConfigEntry<float> pollCycleSeconds, pollVoteSeconds;
         private ConfigEntry<string> pollNoVotesBehavior, pollBlocklist;
+        private ConfigEntry<int> pollMaxPollsPerRound;
+        private ConfigEntry<bool> pollShowTargetPlayer, spawnCommandEnabled;
         private ConfigEntry<string> displayLanguage;
         private KickChatClient kickChatClient;
         private Poll poll;
@@ -73,6 +75,7 @@ namespace PalaCompany
         private readonly HashSet<string> loggedInvalidPerEnemyLimitEntries =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private float lastGlobal = -999f;
+        private float lastSpawnDisabledLog = float.NegativeInfinity;
         private Dictionary<string, EnemyType> enemyCache;
         private int testIndex, fakeViewer;
 
@@ -80,6 +83,7 @@ namespace PalaCompany
         {
             gameObject.hideFlags = HideFlags.HideAndDontSave;
             prefix = Config.Bind("Commands", "Prefix", "!spawn", "Chat command that triggers a spawn.");
+            spawnCommandEnabled = Config.Bind("Commands", "SpawnCommandEnabled", true, "Enable the chat spawn command.");
             userCooldown = Config.Bind("Limits", "UserCooldownSeconds", 30f, "Seconds between spawns per viewer.");
             globalCooldown = Config.Bind("Limits", "GlobalCooldownSeconds", 5f, "Seconds between any two spawns.");
             maxLive = Config.Bind("Limits", "MaxLiveEnemies", 8, "No spawns while this many enemies are alive.");
@@ -102,10 +106,12 @@ namespace PalaCompany
             pollEnabled = Config.Bind("Poll", "Enabled", false, "Enable periodic chat polls.");
             pollCycleSeconds = Config.Bind("Poll", "CycleSeconds", 60f, "Seconds between polls.");
             pollVoteSeconds = Config.Bind("Poll", "VoteSeconds", 45f, "Seconds votes remain open.");
+            pollMaxPollsPerRound = Config.Bind("Poll", "MaxPollsPerRound", 0, "Maximum polls per round; 0 is unlimited.");
             pollAllowVoteChange = Config.Bind("Poll", "AllowVoteChange", true, "Allow viewers to change their vote.");
             pollNoVotesBehavior = Config.Bind("Poll", "NoVotesBehavior", "Random", "Choose Random or Skip when a poll receives no votes.");
             pollBlocklist = Config.Bind("Poll", "PollBlocklist", "", "Comma-separated enemies that are never offered in polls.");
             pollWritePollFile = Config.Bind("Poll", "WritePollFile", true, "Write poll status to pala_poll.txt in the BepInEx config folder.");
+            pollShowTargetPlayer = Config.Bind("Poll", "ShowTargetPlayer", true, "Include the targeted player in the poll result tip.");
             poll = new Poll(
                 Logger.LogInfo,
                 GetPollCandidates,
@@ -120,7 +126,8 @@ namespace PalaCompany
                     prefix, blocklist, kickChatroomId, kickAppKey, kickCluster,
                     RestartKick,
                     pollEnabled, pollCycleSeconds, pollVoteSeconds, pollAllowVoteChange,
-                    pollNoVotesBehavior, pollBlocklist, pollWritePollFile, displayLanguage);
+                    pollNoVotesBehavior, pollBlocklist, pollWritePollFile, displayLanguage,
+                    pollMaxPollsPerRound, pollShowTargetPlayer, spawnCommandEnabled);
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (kickEnabled.Value) StartKickClient();
@@ -383,9 +390,12 @@ namespace PalaCompany
                 poll.Update(
                     pollEnabled.Value,
                     hostInRound,
+                    startOfRound != null && startOfRound.shipHasLanded,
                     pollCycleSeconds.Value,
                     pollVoteSeconds.Value,
+                    pollMaxPollsPerRound.Value,
                     pollNoVotesBehavior.Value,
+                    pollShowTargetPlayer.Value,
                     pollWritePollFile.Value,
                     forcePollToggle);
 
@@ -496,12 +506,23 @@ namespace PalaCompany
             string pre = prefix.Value.Trim();
             if (!text.StartsWith(pre + " ", StringComparison.OrdinalIgnoreCase)) return;
 
+            if (!spawnCommandEnabled.Value)
+            {
+                float now = Time.time;
+                if (now - lastSpawnDisabledLog >= 10f)
+                {
+                    Logger.LogInfo("[rejected] " + msg.User + ": spawn command disabled");
+                    lastSpawnDisabledLog = now;
+                }
+                return;
+            }
+
             string arg = text.Substring(pre.Length).Trim();
             if (arg.Length == 0) return;
 
             if (!TryResolveEnemyType(arg, out var type)) { Reject(msg.User, "unknown enemy '" + arg + "'"); return; }
 
-            TrySpawn(msg.User, type, true, out _);
+            TrySpawn(msg.User, type, true, out _, out _);
         }
 
         private IList<EnemyType> GetPollCandidates()
@@ -526,9 +547,15 @@ namespace PalaCompany
                 .ToList();
         }
 
-        private string SpawnPollWinner(EnemyType winner)
+        private PollSpawnResult SpawnPollWinner(EnemyType winner)
         {
-            return TrySpawn("poll", winner, false, out string reason) ? null : reason;
+            bool spawned = TrySpawn("poll", winner, false, out string reason, out var target);
+            return new PollSpawnResult
+            {
+                Spawned = spawned,
+                FailureReason = reason,
+                TargetPlayerName = target != null ? target.playerUsername : null
+            };
         }
 
         private void ShowPollTip(string header, string body)
@@ -629,9 +656,15 @@ namespace PalaCompany
             return true;
         }
 
-        private bool TrySpawn(string requester, EnemyType type, bool applyCooldowns, out string reason)
+        private bool TrySpawn(
+            string requester,
+            EnemyType type,
+            bool applyCooldowns,
+            out string reason,
+            out PlayerControllerB target)
         {
-            if (!EvaluateSpawn(type, requester, applyCooldowns, out reason, out var player))
+            target = null;
+            if (!EvaluateSpawn(type, requester, applyCooldowns, out reason, out target))
             {
                 Reject(requester, reason);
                 return false;
@@ -639,7 +672,7 @@ namespace PalaCompany
 
             var rm = RoundManager.Instance;
             Vector2 ring = UnityEngine.Random.insideUnitCircle.normalized * spawnRadius.Value;
-            Vector3 wanted = player.transform.position + new Vector3(ring.x, 0f, ring.y);
+            Vector3 wanted = target.transform.position + new Vector3(ring.x, 0f, ring.y);
             if (!NavMesh.SamplePosition(wanted, out var hit, 10f, NavMesh.AllAreas))
             {
                 reason = "no walkable spot near target";
@@ -672,9 +705,9 @@ namespace PalaCompany
                     Loc.T("tip.spawn.header", requester),
                     Loc.T("tip.spawn.body", type.enemyName));
             Logger.LogInfo("[spawned] " + type.enemyName + " for " + requester
-                + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
-                + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")
-                + " playerInside=" + player.isInsideFactory);
+                + " | dist=" + Vector3.Distance(hit.position, target.transform.position).ToString("F1")
+                + " dy=" + (hit.position.y - target.transform.position.y).ToString("F1")
+                + " playerInside=" + target.isInsideFactory);
             reason = string.Empty;
             return true;
         }

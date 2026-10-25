@@ -6,11 +6,18 @@ using UnityEngine;
 
 namespace PalaCompany
 {
+    internal sealed class PollSpawnResult
+    {
+        internal bool Spawned;
+        internal string FailureReason;
+        internal string TargetPlayerName;
+    }
+
     internal sealed class Poll
     {
         private readonly Action<string> _log;
         private readonly Func<IList<EnemyType>> _getCandidates;
-        private readonly Func<EnemyType, string> _trySpawn;
+        private readonly Func<EnemyType, PollSpawnResult> _trySpawn;
         private readonly Action<string, string> _showTip;
         private readonly string _filePath;
         private readonly System.Random _random = new System.Random();
@@ -28,14 +35,17 @@ namespace PalaCompany
         private bool _cycleInitialized;
         private bool _debugForced;
         private bool _loggedInsufficientCandidates;
+        private bool _loggedPollLimitReached;
+        private bool _previousShipLanded;
         private bool _loggedFileError;
+        private int _pollsOpenedThisRound;
         private string _resultText = "";
         private string _lastFileText;
 
         internal Poll(
             Action<string> log,
             Func<IList<EnemyType>> getCandidates,
-            Func<EnemyType, string> trySpawn,
+            Func<EnemyType, PollSpawnResult> trySpawn,
             Action<string, string> showTip,
             string filePath)
         {
@@ -80,9 +90,12 @@ namespace PalaCompany
         internal void Update(
             bool enabled,
             bool hostInRound,
+            bool shipHasLanded,
             float cycleSeconds,
             float voteSeconds,
+            int maxPollsPerRound,
             string noVotesBehavior,
+            bool showTargetPlayer,
             bool writePollFile,
             bool forceToggle)
         {
@@ -90,6 +103,13 @@ namespace PalaCompany
             float elapsed = _hasUpdatedTime ? Math.Max(0f, now - _lastUpdateTime) : 0f;
             _lastUpdateTime = now;
             _hasUpdatedTime = true;
+
+            if (shipHasLanded && !_previousShipLanded)
+            {
+                _pollsOpenedThisRound = 0;
+                _loggedPollLimitReached = false;
+            }
+            _previousShipLanded = shipHasLanded;
 
             if (!hostInRound)
             {
@@ -106,11 +126,11 @@ namespace PalaCompany
             if (forceToggle)
             {
                 if (IsOpen)
-                    ClosePoll(cycleSeconds, noVotesBehavior);
+                    ClosePoll(cycleSeconds, noVotesBehavior, showTargetPlayer);
                 else
                 {
                     _debugForced = true;
-                    if (!OpenPoll(voteSeconds))
+                    if (!OpenPoll(voteSeconds, maxPollsPerRound))
                     {
                         _debugForced = false;
                         _cycleRemaining = 5f;
@@ -138,7 +158,7 @@ namespace PalaCompany
             {
                 _voteRemaining -= elapsed;
                 if (_voteRemaining <= 0f)
-                    ClosePoll(cycleSeconds, noVotesBehavior);
+                    ClosePoll(cycleSeconds, noVotesBehavior, showTargetPlayer);
             }
             else if (enabled)
             {
@@ -152,7 +172,7 @@ namespace PalaCompany
                     _cycleRemaining -= elapsed;
                     if (_cycleRemaining <= 0f)
                     {
-                        if (!OpenPoll(voteSeconds))
+                        if (!OpenPoll(voteSeconds, maxPollsPerRound))
                             _cycleRemaining = 5f;
                     }
                 }
@@ -165,8 +185,14 @@ namespace PalaCompany
             UpdatePollFile(now, writePollFile);
         }
 
-        private bool OpenPoll(float voteSeconds)
+        private bool OpenPoll(float voteSeconds, int maxPollsPerRound)
         {
+            if (maxPollsPerRound > 0 && _pollsOpenedThisRound >= maxPollsPerRound)
+            {
+                LogPollLimitReached();
+                return false;
+            }
+
             var candidates = _getCandidates().Where(type => type != null).Distinct().ToList();
             if (candidates.Count < 2)
             {
@@ -184,6 +210,9 @@ namespace PalaCompany
             candidates.RemoveAt(first);
             _option2 = candidates[_random.Next(candidates.Count)];
             _votes.Clear();
+            _pollsOpenedThisRound++;
+            if (maxPollsPerRound > 0 && _pollsOpenedThisRound >= maxPollsPerRound)
+                LogPollLimitReached();
             _voteRemaining = Math.Max(1f, voteSeconds);
             _resultRemaining = 0f;
             _resultText = "";
@@ -193,7 +222,14 @@ namespace PalaCompany
             return true;
         }
 
-        private void ClosePoll(float cycleSeconds, string noVotesBehavior)
+        private void LogPollLimitReached()
+        {
+            if (_loggedPollLimitReached) return;
+            _log("Poll limit reached for this round.");
+            _loggedPollLimitReached = true;
+        }
+
+        private void ClosePoll(float cycleSeconds, string noVotesBehavior, bool showTargetPlayer)
         {
             if (!IsOpen) return;
 
@@ -244,16 +280,28 @@ namespace PalaCompany
                 return;
             }
 
-            string failureReason = _trySpawn(winner);
-            if (failureReason == string.Empty)
-                failureReason = "spawn failed; see the plugin log for details";
+            var spawnResult = _trySpawn(winner);
+            string failureReason = spawnResult != null && spawnResult.Spawned
+                ? null
+                : spawnResult != null ? spawnResult.FailureReason : null;
+            if (spawnResult == null || !spawnResult.Spawned)
+            {
+                if (failureReason == string.Empty || failureReason == null)
+                    failureReason = "spawn failed; see the plugin log for details";
+            }
             if (!string.IsNullOrEmpty(failureReason))
                 _log("Poll spawn failed: " + failureReason);
 
             string resultBody = voteSummary;
             if (!string.IsNullOrEmpty(failureReason))
                 resultBody += Loc.T("poll.spawn.failed", winner.enemyName, failureReason);
-            _showTip(Loc.T("poll.result.tip.winner.header", winner.enemyName), resultBody);
+            string resultHeader = showTargetPlayer
+                && spawnResult != null
+                && spawnResult.Spawned
+                && !string.IsNullOrEmpty(spawnResult.TargetPlayerName)
+                    ? Loc.T("tip.spawn.header", winner.enemyName + " spawned near " + spawnResult.TargetPlayerName)
+                    : Loc.T("poll.result.tip.winner.header", winner.enemyName);
+            _showTip(resultHeader, resultBody);
         }
 
         private void ClearOpenPoll()

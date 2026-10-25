@@ -34,7 +34,10 @@ namespace PalaCompany
             ConfigEntry<string> pollNoVotesBehavior,
             ConfigEntry<string> pollBlocklist,
             ConfigEntry<bool> pollWritePollFile,
-            ConfigEntry<string> displayLanguage)
+            ConfigEntry<string> displayLanguage,
+            ConfigEntry<int> pollMaxPollsPerRound,
+            ConfigEntry<bool> pollShowTargetPlayer,
+            ConfigEntry<bool> spawnCommandEnabled)
         {
             LethalConfigManager.SkipAutoGen();
 
@@ -60,6 +63,12 @@ namespace PalaCompany
             {
                 Min = 0,
                 Max = 10,
+                RequiresRestart = false
+            }));
+            LethalConfigManager.AddConfigItem(new IntSliderConfigItem(pollMaxPollsPerRound, new IntSliderOptions
+            {
+                Min = 0,
+                Max = 50,
                 RequiresRestart = false
             }));
             LethalConfigManager.AddConfigItem(new FloatSliderConfigItem(spawnRadius, new FloatSliderOptions
@@ -88,6 +97,8 @@ namespace PalaCompany
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollEnabled, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollAllowVoteChange, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollWritePollFile, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(pollShowTargetPlayer, requiresRestart: false));
+            LethalConfigManager.AddConfigItem(new BoolCheckBoxConfigItem(spawnCommandEnabled, requiresRestart: false));
 
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(prefix, requiresRestart: false));
             LethalConfigManager.AddConfigItem(new TextInputFieldConfigItem(blocklist, requiresRestart: false));
