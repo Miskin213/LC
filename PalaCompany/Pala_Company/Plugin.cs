@@ -14,6 +14,7 @@ using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using GameNetcodeStuff;
 
 namespace PalaCompany
 {
@@ -450,29 +451,50 @@ namespace PalaCompany
             string arg = text.Substring(pre.Length).Trim();
             if (arg.Length == 0) return;
 
-            var rm = RoundManager.Instance;
-            var sor = StartOfRound.Instance;
-            if (rm == null || sor == null) { Reject(msg.User, "not in a game"); return; }
-            if (!rm.IsServer) { Reject(msg.User, "not the host"); return; }
-            if (!sor.shipHasLanded) { Reject(msg.User, "ship hasn't landed"); return; }
-
             if (!TryResolveEnemyType(arg, out var type)) { Reject(msg.User, "unknown enemy '" + arg + "'"); return; }
 
+            TrySpawn(msg.User, type, true, out _);
+        }
+
+        public bool IsSpawnableNow(EnemyType type)
+        {
+            return EvaluateSpawn(type, "poll", false, out _, out _);
+        }
+
+        private bool EvaluateSpawn(
+            EnemyType type,
+            string requester,
+            bool applyCooldowns,
+            out string reason,
+            out PlayerControllerB target)
+        {
+            reason = null;
+            target = null;
+
+            var rm = RoundManager.Instance;
+            var sor = StartOfRound.Instance;
+            if (rm == null || sor == null) { reason = "not in a game"; return false; }
+            if (!rm.IsServer) { reason = "not the host"; return false; }
+            if (!sor.shipHasLanded) { reason = "ship hasn't landed"; return false; }
+
             var blocked = new HashSet<string>(blocklist.Value.Split(',').Select(Norm));
-            if (blocked.Contains(Norm(type.enemyName))) { Reject(msg.User, type.enemyName + " is blocked"); return; }
+            if (blocked.Contains(Norm(type.enemyName))) { reason = type.enemyName + " is blocked"; return false; }
             if (type.isOutsideEnemy && type.nestSpawnPrefab != null && type.requireNestObjectsToSpawn
                 && !rm.enemyNestSpawnObjects.Any(n => n != null && n.enemyType == type))
             {
-                Reject(msg.User, type.enemyName + " needs a nest that doesn't exist on this moon");
-                return;
+                reason = type.enemyName + " needs a nest that doesn't exist on this moon";
+                return false;
             }
 
-            float now = Time.time;
-            if (now - lastGlobal < globalCooldown.Value) { Reject(msg.User, "global cooldown"); return; }
-            if (lastByUser.TryGetValue(msg.User, out var last) && now - last < userCooldown.Value)
+            if (applyCooldowns)
             {
-                Reject(msg.User, "your cooldown: " + Mathf.CeilToInt(userCooldown.Value - (now - last)) + "s left");
-                return;
+                float now = Time.time;
+                if (now - lastGlobal < globalCooldown.Value) { reason = "global cooldown"; return false; }
+                if (lastByUser.TryGetValue(requester, out var last) && now - last < userCooldown.Value)
+                {
+                    reason = "your cooldown: " + Mathf.CeilToInt(userCooldown.Value - (now - last)) + "s left";
+                    return false;
+                }
             }
 
             int live;
@@ -485,7 +507,7 @@ namespace PalaCompany
             {
                 live = rm.SpawnedEnemies.Count(e => e != null && !e.isEnemyDead);
             }
-            if (live >= maxLive.Value) { Reject(msg.User, "too many enemies alive (" + live + ")"); return; }
+            if (live >= maxLive.Value) { reason = "too many enemies alive (" + live + ")"; return false; }
 
             var enemyLimits = ParsePerEnemyLimits();
             int enemyLimit;
@@ -499,8 +521,8 @@ namespace PalaCompany
                 int enemyCount = enemiesToCount.Count(e => e != null && !e.isEnemyDead && e.enemyType == type);
                 if (enemyCount >= enemyLimit)
                 {
-                    Reject(msg.User, type.enemyName + " limit reached (" + enemyCount + " alive)");
-                    return;
+                    reason = type.enemyName + " limit reached (" + enemyCount + " alive)";
+                    return false;
                 }
             }
 
@@ -511,40 +533,60 @@ namespace PalaCompany
                 .ToList();
             if (candidates.Count == 0)
             {
-                Reject(msg.User, type.enemyName + " needs a player " + (wantInside ? "inside the facility" : "outside"));
-                return;
+                reason = type.enemyName + " needs a player " + (wantInside ? "inside the facility" : "outside");
+                return false;
             }
 
-            var player = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            target = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            return true;
+        }
+
+        private bool TrySpawn(string requester, EnemyType type, bool applyCooldowns, out string reason)
+        {
+            if (!EvaluateSpawn(type, requester, applyCooldowns, out reason, out var player))
+            {
+                Reject(requester, reason);
+                return false;
+            }
+
+            var rm = RoundManager.Instance;
             Vector2 ring = UnityEngine.Random.insideUnitCircle.normalized * spawnRadius.Value;
             Vector3 wanted = player.transform.position + new Vector3(ring.x, 0f, ring.y);
             if (!NavMesh.SamplePosition(wanted, out var hit, 10f, NavMesh.AllAreas))
             {
-                Reject(msg.User, "no walkable spot near target");
-                return;
+                reason = "no walkable spot near target";
+                Reject(requester, reason);
+                return false;
             }
 
             var spawnedEnemyReference = rm.SpawnEnemyGameObject(hit.position, 0f, -1, type);
-            lastGlobal = now;
-            lastByUser[msg.User] = now;
+            if (applyCooldowns)
+            {
+                lastGlobal = Time.time;
+                lastByUser[requester] = lastGlobal;
+            }
             if (!spawnedEnemyReference.TryGet(out var networkObject))
             {
                 Logger.LogError("Could not track spawned " + type.enemyName + " for the live enemy cap.");
-                return;
+                reason = string.Empty;
+                return false;
             }
             var spawnedEnemy = networkObject.GetComponent<EnemyAI>();
             if (spawnedEnemy == null)
             {
                 Logger.LogError("Spawned " + type.enemyName + " has no EnemyAI component; it cannot be tracked for the live enemy cap.");
-                return;
+                reason = string.Empty;
+                return false;
             }
             modSpawnedEnemies.Add(spawnedEnemy);
             if (showSpawnTips.Value && HUDManager.Instance != null)
-                HUDManager.Instance.DisplayTip(msg.User, type.enemyName);
-            Logger.LogInfo("[spawned] " + type.enemyName + " for " + msg.User
+                HUDManager.Instance.DisplayTip(requester, type.enemyName);
+            Logger.LogInfo("[spawned] " + type.enemyName + " for " + requester
                 + " | dist=" + Vector3.Distance(hit.position, player.transform.position).ToString("F1")
                 + " dy=" + (hit.position.y - player.transform.position.y).ToString("F1")
                 + " playerInside=" + player.isInsideFactory);
+            reason = string.Empty;
+            return true;
         }
     }
 }
